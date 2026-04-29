@@ -1,0 +1,643 @@
+<template>
+  <view class="page-container">
+    <ZenHeader title="排盘信息" :show-back="true" />
+
+    <main class="main-content">
+      <!-- Tab 切换 -->
+      <view class="tab-container">
+        <view 
+          class="tab-item" 
+          :class="{ active: currentTab === 0 }"
+          @click="currentTab = 0"
+        >
+          <text class="tab-text">选择档案</text>
+        </view>
+        <view 
+          class="tab-item" 
+          :class="{ active: currentTab === 1 }"
+          @click="currentTab = 1"
+        >
+          <text class="tab-text">快速排盘</text>
+        </view>
+      </view>
+
+      <!-- 选择档案板块 -->
+      <view v-if="currentTab === 0" class="archive-section">
+        <!-- 新建档案入口 -->
+        <view class="create-archive-card" hover-class="card-hover" @click="goToCreateArchive">
+          <text class="material-symbols-outlined add-icon">add_circle</text>
+          <text class="create-text">新建并保存档案</text>
+        </view>
+
+        <!-- 档案列表 -->
+        <view v-if="archiveStore.archives.length > 0" class="archive-list">
+          <view 
+            v-for="archive in archiveStore.archives" 
+            :key="archive.id"
+            class="archive-item"
+            hover-class="card-hover"
+            @click="selectArchive(archive)"
+          >
+            <view class="archive-header">
+              <text class="archive-name">{{ archive.name }}</text>
+              <text class="archive-gender">{{ archive.gender === 1 ? '乾造' : '坤造' }}</text>
+            </view>
+            <view class="archive-info">
+              <text class="info-label">出生日期</text>
+              <text class="info-value">{{ archive.birthDate }} {{ archive.birthTime }}</text>
+            </view>
+            <view v-if="archive.relation" class="archive-tag">
+              <text class="tag-text">{{ archive.relation }}</text>
+            </view>
+            <view v-if="archive.isDefault" class="default-badge">
+              <text class="badge-text">默认</text>
+            </view>
+          </view>
+        </view>
+
+        <!-- 空状态 -->
+        <view v-else class="empty-state">
+          <text class="material-symbols-outlined empty-icon">folder_open</text>
+          <text class="empty-text">暂无档案</text>
+          <text class="empty-hint">点击上方按钮创建第一个档案</text>
+        </view>
+      </view>
+
+      <!-- 快速排盘板块 -->
+      <view v-if="currentTab === 1" class="quick-section">
+        <view class="form-container">
+          <!-- 姓名 -->
+          <view class="form-item">
+            <text class="form-label">姓名</text>
+            <input 
+              class="form-input" 
+              v-model="quickForm.name"
+              placeholder="请输入姓名"
+              placeholder-class="placeholder-style"
+            />
+          </view>
+
+          <!-- 性别 -->
+          <view class="form-item">
+            <text class="form-label">性别</text>
+            <view class="radio-group">
+              <view 
+                class="radio-item" 
+                :class="{ active: quickForm.gender === 1 }"
+                @click="quickForm.gender = 1"
+              >
+                <text class="radio-text">男 (乾造)</text>
+              </view>
+              <view 
+                class="radio-item" 
+                :class="{ active: quickForm.gender === 0 }"
+                @click="quickForm.gender = 0"
+              >
+                <text class="radio-text">女 (坤造)</text>
+              </view>
+            </view>
+          </view>
+
+          <!-- 出生日期 -->
+          <view class="form-item">
+            <text class="form-label">出生日期</text>
+            <picker 
+              mode="date" 
+              :value="quickForm.birthDate"
+              @change="onDateChange"
+            >
+              <view class="picker-display">
+                <text class="picker-text" :class="{ placeholder: !quickForm.birthDate }">
+                  {{ quickForm.birthDate || '请选择日期' }}
+                </text>
+                <text class="material-symbols-outlined picker-icon">calendar_today</text>
+              </view>
+            </picker>
+          </view>
+
+          <!-- 出生时间 -->
+          <view class="form-item">
+            <text class="form-label">出生时间</text>
+            <picker 
+              mode="time" 
+              :value="quickForm.birthTime"
+              @change="onTimeChange"
+            >
+              <view class="picker-display">
+                <text class="picker-text" :class="{ placeholder: !quickForm.birthTime }">
+                  {{ quickForm.birthTime || '请选择时间' }}
+                </text>
+                <text class="material-symbols-outlined picker-icon">schedule</text>
+              </view>
+            </picker>
+          </view>
+
+          <!-- 排盘按钮 -->
+          <view class="button-container">
+            <button 
+              class="calculate-button" 
+              hover-class="button-hover"
+              @click="quickCalculate"
+            >
+              <text class="button-text">开始排盘 (不留档)</text>
+            </button>
+          </view>
+        </view>
+      </view>
+    </main>
+  </view>
+</template>
+
+<script setup lang="ts">
+import { ref, reactive, onMounted } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
+import ZenHeader from '@/components/ZenHeader/ZenHeader.vue'
+import { useArchiveStore } from '@/store/useArchiveStore'
+import { useBaziStore } from '@/store/useBaziStore'
+import type { Archive } from '@/store/useArchiveStore'
+
+// 强制隐藏原生 TabBar
+onMounted(() => {
+  uni.hideTabBar({
+    animation: false,
+    success: () => console.log('✅ [setup] 原生 TabBar 已隐藏'),
+    fail: () => console.log('ℹ️ [setup] 当前页面无 TabBar')
+  })
+})
+
+// 页面显示时刷新档案列表
+onShow(() => {
+  console.log('📋 [setup] 页面显示，刷新档案列表')
+  archiveStore.fetchArchives()
+})
+
+// 引入 Store
+const archiveStore = useArchiveStore()
+const baziStore = useBaziStore()
+
+// Tab 状态
+const currentTab = ref(0) // 0=选择档案, 1=快速排盘
+
+// 快速排盘表单
+const quickForm = reactive({
+  name: '',
+  gender: 1 as 0 | 1,
+  birthDate: '',
+  birthTime: ''
+})
+
+// 跳转到新建档案页
+const goToCreateArchive = () => {
+  uni.navigateTo({
+    url: '/pages/archive/add'
+  })
+}
+
+// 选择档案并排盘
+const selectArchive = async (archive: Archive) => {
+  try {
+    console.log('📋 [setup] 选择档案:', archive)
+
+    // 显示加载提示
+    uni.showLoading({
+      title: '正在排盘...',
+      mask: true
+    })
+
+    // 调用排盘接口
+    await baziStore.calculateByArchive(archive.id)
+
+    // 隐藏加载提示
+    uni.hideLoading()
+
+    console.log('✅ [setup] 排盘成功，跳转到结果页')
+
+    // 跳转到结果页
+    uni.navigateTo({
+      url: '/pages/result/result'
+    })
+  } catch (error: any) {
+    console.error('❌ [setup] 排盘失败:', error)
+    uni.hideLoading()
+  }
+}
+
+// 日期选择器变化
+const onDateChange = (e: any) => {
+  quickForm.birthDate = e.detail.value
+  console.log('📅 [setup] 选择日期:', quickForm.birthDate)
+}
+
+// 时间选择器变化
+const onTimeChange = (e: any) => {
+  quickForm.birthTime = e.detail.value
+  console.log('⏰ [setup] 选择时间:', quickForm.birthTime)
+}
+
+// 快速排盘
+const quickCalculate = async () => {
+  // 表单验证
+  if (!quickForm.name.trim()) {
+    uni.showToast({
+      title: '请输入姓名',
+      icon: 'none',
+      duration: 1500
+    })
+    return
+  }
+
+  if (!quickForm.birthDate) {
+    uni.showToast({
+      title: '请选择出生日期',
+      icon: 'none',
+      duration: 1500
+    })
+    return
+  }
+
+  if (!quickForm.birthTime) {
+    uni.showToast({
+      title: '请选择出生时间',
+      icon: 'none',
+      duration: 1500
+    })
+    return
+  }
+
+  try {
+    console.log('🚀 [setup] 开始快速排盘:', quickForm)
+
+    // 显示加载提示
+    uni.showLoading({
+      title: '正在排盘...',
+      mask: true
+    })
+
+    // 解析日期和时间
+    const [year, month, day] = quickForm.birthDate.split('-').map(Number)
+    const [hour, minute] = quickForm.birthTime.split(':').map(Number)
+
+    // 调用排盘接口
+    await baziStore.calculateByData({
+      name: quickForm.name.trim(),
+      gender: quickForm.gender,
+      birth_year: year,
+      birth_month: month,
+      birth_day: day,
+      birth_hour: hour,
+      birth_minute: minute,
+      is_deep_analysis: false
+    })
+
+    // 隐藏加载提示
+    uni.hideLoading()
+
+    console.log('✅ [setup] 排盘成功，跳转到结果页')
+
+    // 跳转到结果页
+    uni.navigateTo({
+      url: '/pages/result/result'
+    })
+  } catch (error: any) {
+    console.error('❌ [setup] 排盘失败:', error)
+    uni.hideLoading()
+  }
+}
+</script>
+
+<style scoped>
+@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,200,0,0&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;700&family=Inter:wght@300;400;500&display=swap');
+
+/* 全局变量 */
+.page-container {
+  --zen-bg: #FCFAF8;
+  --zen-ink: #1A1A1A;
+  --zen-gray: #8E8E93;
+  --zen-border: #F0F0F0;
+  --zen-accent: #A68B67;
+  --zen-cinnabar: #B22222;
+  
+  min-height: 100vh;
+  background-color: var(--zen-bg);
+  font-family: 'Inter', system-ui, sans-serif;
+  color: var(--zen-ink);
+}
+
+/* 主内容区 */
+.main-content {
+  padding-bottom: 200rpx;
+}
+
+/* Tab 切换 */
+.tab-container {
+  display: flex;
+  border-bottom: 1px solid var(--zen-border);
+  margin: 0 40rpx;
+}
+
+.tab-item {
+  flex: 1;
+  padding: 30rpx 0;
+  text-align: center;
+  border-bottom: 2px solid transparent;
+  transition: all 0.3s;
+}
+
+.tab-item.active {
+  border-bottom-color: var(--zen-ink);
+}
+
+.tab-text {
+  font-size: 28rpx;
+  font-weight: 300;
+  letter-spacing: 0.1em;
+  color: var(--zen-gray);
+}
+
+.tab-item.active .tab-text {
+  font-weight: 500;
+  color: var(--zen-ink);
+}
+
+/* 选择档案板块 */
+.archive-section {
+  padding: 40rpx;
+}
+
+/* 新建档案卡片 */
+.create-archive-card {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20rpx;
+  padding: 40rpx;
+  background-color: #fff;
+  border: 2px dashed var(--zen-border);
+  border-radius: 16rpx;
+  margin-bottom: 40rpx;
+  transition: all 0.3s;
+}
+
+.card-hover {
+  background-color: #F5F3F0;
+}
+
+.add-icon {
+  font-size: 48rpx;
+  color: var(--zen-accent);
+  font-weight: 200;
+}
+
+.create-text {
+  font-size: 28rpx;
+  color: var(--zen-accent);
+  letter-spacing: 0.05em;
+}
+
+/* 档案列表 */
+.archive-list {
+  display: flex;
+  flex-direction: column;
+  gap: 24rpx;
+}
+
+.archive-item {
+  position: relative;
+  padding: 40rpx;
+  background-color: #fff;
+  border: 1px solid var(--zen-border);
+  border-radius: 16rpx;
+  transition: all 0.3s;
+}
+
+.archive-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 24rpx;
+}
+
+.archive-name {
+  font-family: 'Noto Serif SC', serif;
+  font-size: 32rpx;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+}
+
+.archive-gender {
+  font-size: 24rpx;
+  color: var(--zen-gray);
+  letter-spacing: 0.1em;
+}
+
+.archive-info {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+  margin-bottom: 20rpx;
+}
+
+.info-label {
+  font-size: 22rpx;
+  color: var(--zen-gray);
+  letter-spacing: 0.05em;
+}
+
+.info-value {
+  font-size: 24rpx;
+  color: var(--zen-ink);
+  font-weight: 300;
+}
+
+.archive-tag {
+  display: inline-block;
+  padding: 8rpx 20rpx;
+  background-color: rgba(166, 139, 103, 0.1);
+  border-radius: 8rpx;
+}
+
+.tag-text {
+  font-size: 20rpx;
+  color: var(--zen-accent);
+  letter-spacing: 0.05em;
+}
+
+.default-badge {
+  position: absolute;
+  top: 20rpx;
+  right: 20rpx;
+  padding: 6rpx 16rpx;
+  background-color: var(--zen-cinnabar);
+  border-radius: 6rpx;
+}
+
+.badge-text {
+  font-size: 18rpx;
+  color: #fff;
+  letter-spacing: 0.1em;
+}
+
+/* 空状态 */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 120rpx 40rpx;
+}
+
+.empty-icon {
+  font-size: 120rpx;
+  color: var(--zen-border);
+  margin-bottom: 40rpx;
+  font-weight: 200;
+}
+
+.empty-text {
+  font-size: 28rpx;
+  color: var(--zen-gray);
+  margin-bottom: 16rpx;
+  letter-spacing: 0.05em;
+}
+
+.empty-hint {
+  font-size: 22rpx;
+  color: rgba(142, 142, 147, 0.6);
+  letter-spacing: 0.05em;
+}
+
+/* 快速排盘板块 */
+.quick-section {
+  padding: 40rpx;
+}
+
+.form-container {
+  background-color: #fff;
+  border: 1px solid var(--zen-border);
+  border-radius: 16rpx;
+  padding: 40rpx;
+}
+
+.form-item {
+  margin-bottom: 40rpx;
+}
+
+.form-item:last-child {
+  margin-bottom: 0;
+}
+
+.form-label {
+  display: block;
+  font-size: 24rpx;
+  color: var(--zen-gray);
+  margin-bottom: 20rpx;
+  letter-spacing: 0.1em;
+}
+
+.form-input {
+  width: 100%;
+  height: 80rpx;
+  padding: 0 30rpx;
+  font-size: 28rpx;
+  color: var(--zen-ink);
+  background-color: var(--zen-bg);
+  border: 1px solid var(--zen-border);
+  border-radius: 12rpx;
+  transition: border-color 0.3s;
+}
+
+.placeholder-style {
+  color: rgba(142, 142, 147, 0.4);
+  font-weight: 300;
+}
+
+/* 单选组 */
+.radio-group {
+  display: flex;
+  gap: 20rpx;
+}
+
+.radio-item {
+  flex: 1;
+  height: 80rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--zen-bg);
+  border: 1px solid var(--zen-border);
+  border-radius: 12rpx;
+  transition: all 0.3s;
+}
+
+.radio-item.active {
+  background-color: var(--zen-ink);
+  border-color: var(--zen-ink);
+}
+
+.radio-text {
+  font-size: 26rpx;
+  color: var(--zen-gray);
+  letter-spacing: 0.05em;
+}
+
+.radio-item.active .radio-text {
+  color: #fff;
+}
+
+/* 选择器显示 */
+.picker-display {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 80rpx;
+  padding: 0 30rpx;
+  background-color: var(--zen-bg);
+  border: 1px solid var(--zen-border);
+  border-radius: 12rpx;
+}
+
+.picker-text {
+  font-size: 28rpx;
+  color: var(--zen-ink);
+}
+
+.picker-text.placeholder {
+  color: rgba(142, 142, 147, 0.4);
+  font-weight: 300;
+}
+
+.picker-icon {
+  font-size: 36rpx;
+  color: var(--zen-gray);
+  font-weight: 200;
+}
+
+/* 按钮容器 */
+.button-container {
+  margin-top: 60rpx;
+}
+
+.calculate-button {
+  width: 100%;
+  height: 96rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--zen-ink);
+  border: none;
+  border-radius: 12rpx;
+  transition: all 0.3s;
+}
+
+.button-hover {
+  opacity: 0.8;
+}
+
+.button-text {
+  font-size: 28rpx;
+  color: #fff;
+  letter-spacing: 0.15em;
+  font-weight: 300;
+}
+</style>

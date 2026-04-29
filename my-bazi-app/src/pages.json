@@ -1,16 +1,99 @@
 {
-	"pages": [ //pages数组中第一项表示应用启动页，参考：https://uniapp.dcloud.io/collocation/pages
+	"pages": [
 		{
 			"path": "pages/index/index",
 			"style": {
-				"navigationBarTitleText": "uni-app"
+				"navigationStyle": "custom"
+			}
+		},
+		{
+			"path": "pages/questions/questions",
+			"style": {
+				"navigationStyle": "custom"
+			}
+		},
+		{
+			"path": "pages/zen/zen",
+			"style": {
+				"navigationStyle": "custom"
+			}
+		},
+		{
+			"path": "pages/mine/mine",
+			"style": {
+				"navigationStyle": "custom"
+			}
+		},
+		{
+			"path": "pages/result/result",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "排盘结果",
+				"enablePullDownRefresh": false
+			}
+		},
+		{
+			"path": "pages/bazi/setup",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "排盘信息",
+				"enablePullDownRefresh": false
+			}
+		},
+		{
+			"path": "pages/archive/add",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "编辑档案",
+				"enablePullDownRefresh": false
+			}
+		},
+		{
+			"path": "pages/archive/list",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "档案库",
+				"enablePullDownRefresh": false
+			}
+		},
+		{
+			"path": "pages/test/test",
+			"style": {
+				"navigationBarTitleText": "后端排盘测试",
+				"navigationBarBackgroundColor": "#667eea",
+				"navigationBarTextStyle": "white"
 			}
 		}
 	],
 	"globalStyle": {
 		"navigationBarTextStyle": "black",
-		"navigationBarTitleText": "uni-app",
-		"navigationBarBackgroundColor": "#F8F8F8",
-		"backgroundColor": "#F8F8F8"
+		"navigationBarTitleText": "八字排盘",
+		"navigationBarBackgroundColor": "#F9F6F0",
+		"backgroundColor": "#F9F6F0"
+	},
+	"tabBar": {
+		"custom": true,
+		"color": "#999999",
+		"selectedColor": "#B23A34",
+		"backgroundColor": "#F9F6F1",
+		"borderStyle": "white",
+		"list": [
+			{
+				"pagePath": "pages/index/index",
+				"text": "首页"
+			},
+			{
+				"pagePath": "pages/questions/questions",
+				"text": "解惑"
+			},
+			{
+				"pagePath": "pages/zen/zen",
+				"text": "禅修"
+			},
+			{
+				"pagePath": "pages/mine/mine",
+				"text": "我的"
+			}
+		]
 	}
 }

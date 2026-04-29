@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+python-dotenv
+lunar-python
+sqlalchemy[asyncio]
+asyncpg
+pydantic-settings
+psycopg2-binary
