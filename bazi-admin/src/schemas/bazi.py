@@ -12,11 +12,12 @@ class BaziCalculateRequest(BaseModel):
     """八字排盘请求 Schema"""
     archive_id: str = Field(..., description="档案ID (UUID)")
     is_deep_analysis: bool = Field(default=False, description="是否为深度分析")
+    name: Optional[str] = Field(default=None, description="命主姓名（可选，优先取档案中的姓名）")
 
 
 class BaziCalculateByDataRequest(BaseModel):
     """通过原始数据计算八字请求 Schema"""
-    name: str = Field(..., min_length=1, max_length=50, description="姓名")
+    name: Optional[str] = Field(default=None, max_length=50, description="姓名（可选）")
     gender: int = Field(..., ge=0, le=1, description="性别 (1=男, 0=女)")
     birth_year: int = Field(..., ge=1000, le=2100, description="出生年份 (公历)")
     birth_month: int = Field(..., ge=1, le=12, description="出生月份 (公历)")
@@ -88,6 +89,7 @@ class RecordResponse(BaseModel):
     record_id: str = Field(..., description="记录ID (UUID)")
     user_id: str = Field(..., description="用户ID (UUID)")
     archive_id: str = Field(..., description="档案ID (UUID)")
+    name: Optional[str] = Field(None, description="命主姓名（从档案或 five_elements_json 中取）")
     bazi_str: str = Field(..., description="八字字符串")
     five_elements_json: Optional[Dict] = Field(None, description="五行分析 JSON")
     ai_report_markdown: Optional[str] = Field(None, description="AI 分析报告")

@@ -155,32 +155,34 @@ async def calculate_bazi(
         print(f"✅ [fortune] 找到档案: {archive.name}, 性别: {archive.gender}")
         print(f"📅 [fortune] 出生日期: {archive.birth_year}-{archive.birth_month}-{archive.birth_day} {archive.birth_hour}:{archive.birth_minute}")
         
-        # 2. 检查历法类型
-        if archive.calendar_type != "solar":
+        # 2. 处理历法转换
+        birth_year = int(archive.birth_year)
+        birth_month = int(archive.birth_month)
+        birth_day = int(archive.birth_day)
+        birth_hour = int(archive.birth_hour)
+        birth_minute = int(archive.birth_minute)
+        gender = int(archive.gender)
+
+        if archive.calendar_type == "lunar":
+            # 农历转公历
+            try:
+                from lunar_python import Lunar
+                lunar = Lunar.fromYmd(birth_year, birth_month, birth_day)
+                solar = lunar.getSolar()
+                birth_year = solar.getYear()
+                birth_month = solar.getMonth()
+                birth_day = solar.getDay()
+                print(f"🔄 [fortune] 农历转公历: {archive.birth_year}-{archive.birth_month}-{archive.birth_day} → {birth_year}-{birth_month}-{birth_day}")
+            except Exception as e:
+                print(f"❌ [fortune] 农历转公历失败: {e}")
+                raise HTTPException(status_code=400, detail=f"农历转公历失败: {str(e)}")
+        elif archive.calendar_type != "solar":
             print(f"⚠️ [fortune] 不支持的历法类型: {archive.calendar_type}")
-            raise HTTPException(
-                status_code=400,
-                detail="暂不支持农历，请使用公历日期"
-            )
+            raise HTTPException(status_code=400, detail=f"不支持的历法类型: {archive.calendar_type}")
         
-        # 3. 字段类型转换（确保所有参数都是 int 类型）
-        try:
-            birth_year = int(archive.birth_year)
-            birth_month = int(archive.birth_month)
-            birth_day = int(archive.birth_day)
-            birth_hour = int(archive.birth_hour)
-            birth_minute = int(archive.birth_minute)
-            gender = int(archive.gender)
-            
-            print(f"🔢 [fortune] 类型转换成功: year={birth_year}, month={birth_month}, day={birth_day}, hour={birth_hour}, minute={birth_minute}, gender={gender}")
-        except (ValueError, TypeError) as e:
-            print(f"❌ [fortune] 日期字段类型转换失败: {e}")
-            raise HTTPException(
-                status_code=400,
-                detail=f"档案数据格式错误: {str(e)}"
-            )
-        
-        # 4. 调用八字计算引擎
+        print(f"🔢 [fortune] 最终计算参数: year={birth_year}, month={birth_month}, day={birth_day}, hour={birth_hour}, minute={birth_minute}, gender={gender}")
+
+        # 3. 调用八字计算引擎
         try:
             print(f"🧮 [fortune] 开始调用八字计算引擎...")
             bazi_result = calculate_full_bazi(
@@ -208,6 +210,8 @@ async def calculate_bazi(
         # JSONB 序列化：将完整的八字结果转换为可 JSON 序列化的字典
         try:
             five_elements_json = {
+                "name": archive.name,
+                "gender": archive.gender,
                 "solar_date": bazi_result.solar_date,
                 "lunar_date": bazi_result.lunar_date,
                 "shengxiao": bazi_result.shengxiao,
@@ -219,6 +223,7 @@ async def calculate_bazi(
                     "shishen": bazi_result.year_pillar.shishen,
                     "changsheng": bazi_result.year_pillar.changsheng,
                     "canggan_shishen": bazi_result.year_pillar.canggan_shishen,
+                    "shensha": bazi_result.year_pillar.shensha,
                 },
                 "month_pillar": {
                     "gan": bazi_result.month_pillar.gan,
@@ -228,6 +233,7 @@ async def calculate_bazi(
                     "shishen": bazi_result.month_pillar.shishen,
                     "changsheng": bazi_result.month_pillar.changsheng,
                     "canggan_shishen": bazi_result.month_pillar.canggan_shishen,
+                    "shensha": bazi_result.month_pillar.shensha,
                 },
                 "day_pillar": {
                     "gan": bazi_result.day_pillar.gan,
@@ -237,6 +243,7 @@ async def calculate_bazi(
                     "shishen": bazi_result.day_pillar.shishen,
                     "changsheng": bazi_result.day_pillar.changsheng,
                     "canggan_shishen": bazi_result.day_pillar.canggan_shishen,
+                    "shensha": bazi_result.day_pillar.shensha,
                 },
                 "hour_pillar": {
                     "gan": bazi_result.hour_pillar.gan,
@@ -246,6 +253,7 @@ async def calculate_bazi(
                     "shishen": bazi_result.hour_pillar.shishen,
                     "changsheng": bazi_result.hour_pillar.changsheng,
                     "canggan_shishen": bazi_result.hour_pillar.canggan_shishen,
+                    "shensha": bazi_result.hour_pillar.shensha,
                 },
                 "day_master": bazi_result.day_master,
                 "day_master_wuxing": bazi_result.day_master_wuxing,
@@ -265,7 +273,7 @@ async def calculate_bazi(
                 status_code=500,
                 detail=f"数据序列化失败: {str(e)}"
             )
-        
+
         # 6. AI 报告（如果需要深度分析）
         ai_report = None
         if request.is_deep_analysis:
@@ -348,7 +356,7 @@ async def calculate_bazi_by_data(
         八字排盘结果
     """
     try:
-        print(f"🔄 [fortune] 开始快速排盘，姓名: {request.name}")
+        print(f"🔄 [fortune] 开始快速排盘，姓名: {request.name or '未知'}")
         print(f"📅 [fortune] 出生日期: {request.birth_year}-{request.birth_month}-{request.birth_day} {request.birth_hour}:{request.birth_minute}")
         
         # 1. 字段类型转换（确保所有参数都是 int 类型）
@@ -396,6 +404,8 @@ async def calculate_bazi_by_data(
         # JSONB 序列化：将完整的八字结果转换为可 JSON 序列化的字典
         try:
             five_elements_json = {
+                "name": request.name or '未知',
+                "gender": request.gender,
                 "solar_date": bazi_result.solar_date,
                 "lunar_date": bazi_result.lunar_date,
                 "shengxiao": bazi_result.shengxiao,
@@ -407,6 +417,7 @@ async def calculate_bazi_by_data(
                     "shishen": bazi_result.year_pillar.shishen,
                     "changsheng": bazi_result.year_pillar.changsheng,
                     "canggan_shishen": bazi_result.year_pillar.canggan_shishen,
+                    "shensha": bazi_result.year_pillar.shensha,
                 },
                 "month_pillar": {
                     "gan": bazi_result.month_pillar.gan,
@@ -416,6 +427,7 @@ async def calculate_bazi_by_data(
                     "shishen": bazi_result.month_pillar.shishen,
                     "changsheng": bazi_result.month_pillar.changsheng,
                     "canggan_shishen": bazi_result.month_pillar.canggan_shishen,
+                    "shensha": bazi_result.month_pillar.shensha,
                 },
                 "day_pillar": {
                     "gan": bazi_result.day_pillar.gan,
@@ -425,6 +437,7 @@ async def calculate_bazi_by_data(
                     "shishen": bazi_result.day_pillar.shishen,
                     "changsheng": bazi_result.day_pillar.changsheng,
                     "canggan_shishen": bazi_result.day_pillar.canggan_shishen,
+                    "shensha": bazi_result.day_pillar.shensha,
                 },
                 "hour_pillar": {
                     "gan": bazi_result.hour_pillar.gan,
@@ -434,6 +447,7 @@ async def calculate_bazi_by_data(
                     "shishen": bazi_result.hour_pillar.shishen,
                     "changsheng": bazi_result.hour_pillar.changsheng,
                     "canggan_shishen": bazi_result.hour_pillar.canggan_shishen,
+                    "shensha": bazi_result.hour_pillar.shensha,
                 },
                 "day_master": bazi_result.day_master,
                 "day_master_wuxing": bazi_result.day_master_wuxing,
@@ -464,7 +478,7 @@ async def calculate_bazi_by_data(
         response = convert_bazi_result_to_response(
             result=bazi_result,
             record_id=record_id,
-            name=request.name,
+            name=request.name or '未知',
             ai_report=ai_report,
         )
         
@@ -507,8 +521,12 @@ async def get_records(
         测算记录列表
     """
     try:
-        # 构建查询
-        stmt = select(Record).where(Record.user_id == user_id)
+        # 构建查询（join Archive 表以获取命主姓名）
+        stmt = (
+            select(Record, Archive.name.label("archive_name"))
+            .join(Archive, Record.archive_id == Archive.archive_id, isouter=True)
+            .where(Record.user_id == user_id)
+        )
         
         if archive_id:
             stmt = stmt.where(Record.archive_id == archive_id)
@@ -517,7 +535,7 @@ async def get_records(
         
         # 执行查询
         result = await db.execute(stmt)
-        records = result.scalars().all()
+        rows = result.all()
         
         # 统计总数
         count_stmt = select(Record).where(Record.user_id == user_id)
@@ -527,11 +545,30 @@ async def get_records(
         count_result = await db.execute(count_stmt)
         total = len(count_result.scalars().all())
         
+        # 构建响应：name 优先取 archive.name，兜底取 five_elements_json.name
+        record_responses = []
+        for record, archive_name in rows:
+            fej = record.five_elements_json or {}
+            resolved_name = archive_name or fej.get("name") or ""
+            record_dict = {
+                "record_id":          record.record_id,
+                "user_id":            record.user_id,
+                "archive_id":         record.archive_id,
+                "name":               resolved_name,
+                "bazi_str":           record.bazi_str,
+                "five_elements_json": record.five_elements_json,
+                "ai_report_markdown": record.ai_report_markdown,
+                "is_deep_analysis":   record.is_deep_analysis,
+                "created_at":         record.created_at,
+                "updated_at":         record.updated_at,
+            }
+            record_responses.append(RecordResponse.model_validate(record_dict))
+        
         return RecordListResponse(
             success=True,
             message="获取记录成功",
             total=total,
-            records=[RecordResponse.model_validate(record) for record in records],
+            records=record_responses,
         )
         
     except Exception as e:

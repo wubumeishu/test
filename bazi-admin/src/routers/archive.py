@@ -4,7 +4,7 @@
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, update
 from src.database import get_db
 from src.models import Archive
 from src.schemas.archive import (
@@ -29,6 +29,25 @@ async def get_current_user_id() -> str:
     return MOCK_USER_ID
 
 
+async def _clear_other_defaults(db: AsyncSession, user_id: str, exclude_archive_id: str) -> None:
+    """
+    DB 级防脏数据：将指定用户下除 exclude_archive_id 以外的所有档案的
+    is_default 强制置为 False，确保每个用户最多只有一条默认档案记录。
+    调用方负责在同一事务中 commit。
+    """
+    stmt = (
+        update(Archive)
+        .where(
+            Archive.user_id == user_id,
+            Archive.archive_id != exclude_archive_id,
+            Archive.is_default == True,   # noqa: E712  仅更新有脏数据的行，减少写放大
+        )
+        .values(is_default=False)
+        .execution_options(synchronize_session="fetch")
+    )
+    await db.execute(stmt)
+
+
 @router.post("/sync", response_model=ArchiveSyncResponse)
 async def sync_archives(
     request: ArchiveSyncRequest,
@@ -44,7 +63,8 @@ async def sync_archives(
        - 如果数据库中不存在，执行 INSERT
        - 如果数据库中已存在，对比 local_created_at
        - 只有当请求中的时间戳更晚时，才执行 UPDATE
-    3. 返回该用户在云端的所有最新档案列表
+    3. 若某条档案的 is_default=True，先在 DB 层清零该用户其他档案的默认标记
+    4. 返回该用户在云端的所有最新档案列表
     
     Args:
         request: 档案同步请求，包含档案列表
@@ -66,6 +86,10 @@ async def sync_archives(
             existing_archive = result.scalar_one_or_none()
             
             if existing_archive is None:
+                # ── DB 级防脏数据：新建档案若为默认，先清零其他档案 ──
+                if archive_data.is_default:
+                    await _clear_other_defaults(db, user_id, archive_data.archive_id)
+
                 # 档案不存在，执行 INSERT
                 new_archive = Archive(
                     archive_id=archive_data.archive_id,
@@ -73,6 +97,7 @@ async def sync_archives(
                     name=archive_data.name,
                     gender=archive_data.gender,
                     calendar_type=archive_data.calendar_type,
+                    is_lunar=archive_data.calendar_type == "lunar",
                     birth_year=archive_data.birth_year,
                     birth_month=archive_data.birth_month,
                     birth_day=archive_data.birth_day,
@@ -89,10 +114,15 @@ async def sync_archives(
             else:
                 # 档案已存在，对比时间戳
                 if archive_data.local_created_at > existing_archive.local_created_at:
+                    # ── DB 级防脏数据：更新档案若为默认，先清零其他档案 ──
+                    if archive_data.is_default:
+                        await _clear_other_defaults(db, user_id, archive_data.archive_id)
+
                     # 请求中的时间戳更晚，执行 UPDATE
                     existing_archive.name = archive_data.name
                     existing_archive.gender = archive_data.gender
                     existing_archive.calendar_type = archive_data.calendar_type
+                    existing_archive.is_lunar = archive_data.calendar_type == "lunar"
                     existing_archive.birth_year = archive_data.birth_year
                     existing_archive.birth_month = archive_data.birth_month
                     existing_archive.birth_day = archive_data.birth_day
@@ -103,9 +133,15 @@ async def sync_archives(
                     existing_archive.local_created_at = archive_data.local_created_at
                     existing_archive.cloud_uploaded_at = current_timestamp
                     synced_count += 1
-                # 如果请求中的时间戳更早或相等，不做任何操作
+                else:
+                    # 时间戳未推进，但若该档案携带 is_default=False（清洗写回），
+                    # 仍需强制更新 is_default，防止清洗结果被时间戳门槛拦截
+                    if not archive_data.is_default and existing_archive.is_default:
+                        existing_archive.is_default = False
+                        existing_archive.cloud_uploaded_at = current_timestamp
+                        synced_count += 1
         
-        # 提交事务
+        # 提交事务（_clear_other_defaults 与所有 INSERT/UPDATE 在同一事务内）
         await db.commit()
         
         # 查询该用户在云端的所有最新档案

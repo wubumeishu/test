@@ -51,6 +51,28 @@
         </view>
       </view>
 
+      <!-- MBTI 灵性探索入口 -->
+      <view class="mbti-section" @click="goToMBTI">
+        <view class="mbti-card">
+          <view class="mbti-left">
+            <view class="mbti-icon-wrap">
+              <text class="mbti-icon">✦</text>
+            </view>
+          </view>
+          <view class="mbti-body">
+            <view class="mbti-tag-row">
+              <view class="mbti-tag-line"></view>
+              <text class="mbti-tag">PERSONALITY · 性格探索</text>
+            </view>
+            <text class="mbti-title">MBTI 灵性探索</text>
+            <text class="mbti-desc">结合现代心理学，遇见最真实的自己</text>
+          </view>
+          <view class="mbti-arrow">
+            <text class="material-symbols-outlined">arrow_forward</text>
+          </view>
+        </view>
+      </view>
+
       <view class="banner-section">
         <ZenCard padding="0" class="daily-banner">
           <image 
@@ -86,11 +108,12 @@ const currentTab = ref(0)
 
 // 网格数据源 (方便后期从 Python 后端动态获取)
 const gridItems = ref([
-  { icon: 'view_quilt', title: '八字排盘', subtitle: 'BAZI CHART', action: 'BAZI_SETUP' }, // 新增的排盘入口
-  { icon: 'auto_stories', title: '八字精批', subtitle: 'DESTINY INSIGHT', action: 'BAZI_DEEP' }, // 原有的精批入口
-  { icon: 'grain', title: '紫微斗数', subtitle: 'CELESTIAL CHART', action: 'VIEW' },
-  { icon: 'style', title: '塔罗占卜', subtitle: 'INNER ORACLE', action: 'REVEAL' },
-  { icon: 'architecture', title: '居家风水', subtitle: 'HARMONIOUS LIVING', action: 'ANALYZE' }
+  { icon: 'view_quilt',   title: '八字排盘', subtitle: 'BAZI CHART',        action: 'BAZI_SETUP' },
+  { icon: 'auto_stories', title: '八字精批', subtitle: 'DESTINY INSIGHT',   action: 'BAZI_DEEP'  },
+  { icon: 'grain',        title: '紫微斗数', subtitle: 'CELESTIAL CHART',   action: 'VIEW'       },
+  { icon: 'style',        title: '塔罗占卜', subtitle: 'INNER ORACLE',      action: 'REVEAL'     },
+  { icon: 'architecture', title: '居家风水', subtitle: 'HARMONIOUS LIVING', action: 'ANALYZE'    },
+  { icon: 'psychology',   title: 'MBTI 测试', subtitle: 'PERSONALITY',      action: 'MBTI' },
 ])
 
 // 菜单和历史点击事件
@@ -102,23 +125,21 @@ const handleHistory = () => {
   uni.showToast({ title: '历史记录', icon: 'none' })
 }
 
+// 跳转到 MBTI 测算页
+const goToMBTI = () => {
+  uni.navigateTo({ url: '/pages/questions/mbti' })
+}
+
 // 网格项点击事件
 const handleGridItemClick = (item: any) => {
   console.log('🔘 [questions] 点击网格项:', item)
   
-  // 判断是否为八字排盘
   if (item.action === 'BAZI_SETUP') {
-    // 直接跳转到排盘准备页
-    uni.navigateTo({
-      url: '/pages/bazi/setup'
-    })
+    uni.navigateTo({ url: '/pages/bazi/setup' })
+  } else if (item.action === 'MBTI') {
+    goToMBTI()
   } else {
-    // 其他卡片暂时显示提示
-    uni.showToast({
-      title: `${item.title} 功能开发中`,
-      icon: 'none',
-      duration: 1500
-    })
+    uni.showToast({ title: `${item.title} 功能开发中`, icon: 'none', duration: 1500 })
   }
 }
 </script>
@@ -304,6 +325,111 @@ const handleGridItemClick = (item: any) => {
   color: var(--zen-accent);
   letter-spacing: 0.2em;
   font-weight: 300;
+}
+
+/* MBTI 灵性探索入口 */
+.mbti-section {
+  padding: 0 40rpx 60rpx;
+}
+
+.mbti-card {
+  display: flex;
+  align-items: center;
+  gap: 32rpx;
+  padding: 44rpx 40rpx;
+  background: linear-gradient(135deg, rgba(178, 34, 34, 0.04) 0%, rgba(166, 139, 103, 0.06) 100%);
+  border: 1px solid rgba(178, 34, 34, 0.12);
+  border-radius: 4rpx;
+  position: relative;
+  overflow: hidden;
+  transition: background 0.3s;
+}
+
+.mbti-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4rpx;
+  height: 100%;
+  background: linear-gradient(180deg, var(--zen-cinnabar) 0%, var(--zen-accent) 100%);
+}
+
+.mbti-left {
+  flex-shrink: 0;
+}
+
+.mbti-icon-wrap {
+  width: 88rpx;
+  height: 88rpx;
+  border-radius: 50%;
+  border: 1px solid rgba(178, 34, 34, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(178, 34, 34, 0.05);
+}
+
+.mbti-icon {
+  font-size: 40rpx;
+  color: var(--zen-cinnabar);
+  line-height: 1;
+}
+
+.mbti-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.mbti-tag-row {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  margin-bottom: 12rpx;
+}
+
+.mbti-tag-line {
+  width: 24rpx;
+  height: 1px;
+  background: var(--zen-accent);
+  flex-shrink: 0;
+}
+
+.mbti-tag {
+  font-size: 18rpx;
+  color: var(--zen-accent);
+  letter-spacing: 0.2em;
+  font-weight: 300;
+}
+
+.mbti-title {
+  display: block;
+  font-family: 'Noto Serif SC', serif;
+  font-size: 32rpx;
+  color: var(--zen-ink);
+  letter-spacing: 0.1em;
+  margin-bottom: 10rpx;
+}
+
+.mbti-desc {
+  font-size: 22rpx;
+  color: var(--zen-gray);
+  letter-spacing: 0.05em;
+  font-weight: 300;
+  line-height: 1.5;
+}
+
+.mbti-arrow {
+  flex-shrink: 0;
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 50%;
+  border: 1px solid rgba(178, 34, 34, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--zen-cinnabar);
+  font-size: 32rpx;
 }
 
 /* 底部 Banner */

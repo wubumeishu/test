@@ -43,7 +43,26 @@
 
         <!-- 出生日期 -->
         <view class="form-item">
-          <text class="form-label">出生日期</text>
+          <!-- 标签行：左侧文字 + 右侧历法切换 -->
+          <view class="date-label-row">
+            <text class="form-label" style="margin-bottom: 0;">出生日期</text>
+            <view class="calendar-toggle">
+              <view
+                class="toggle-option"
+                :class="{ 'toggle-active': !formData.isLunar }"
+                @click="formData.isLunar = false"
+              >
+                <text class="toggle-text">公历</text>
+              </view>
+              <view
+                class="toggle-option"
+                :class="{ 'toggle-active': formData.isLunar }"
+                @click="formData.isLunar = true"
+              >
+                <text class="toggle-text">农历</text>
+              </view>
+            </view>
+          </view>
           <picker 
             mode="date" 
             :value="formData.birthDate"
@@ -51,8 +70,8 @@
             @change="onDateChange"
           >
             <view class="picker-wrapper">
-              <text class="picker-text" :class="{ placeholder: !formData.birthDate }">
-                {{ formData.birthDate || '请选择出生日期' }}
+              <text class="picker-text">
+                {{ formData.birthDate }}
               </text>
               <text class="material-symbols-outlined picker-icon">calendar_today</text>
             </view>
@@ -79,19 +98,48 @@
           </view>
         </view>
 
-        <!-- 关系标签 -->
+        <!-- 标签 -->
         <view class="form-item">
-          <text class="form-label">关系</text>
-          <view class="tag-group">
-            <view 
-              v-for="tag in relationTags" 
+          <text class="form-label">标签</text>
+
+          <!-- 层一：已选标签展示 -->
+          <view v-if="formData.tags.length > 0" class="selected-tags">
+            <view
+              v-for="(tag, index) in formData.tags"
               :key="tag"
-              class="tag-item" 
-              :class="{ active: formData.relation === tag }"
-              @click="formData.relation = tag"
-              hover-class="tag-hover"
+              class="selected-tag"
             >
-              <text class="tag-text">{{ tag }}</text>
+              <text class="selected-tag-text">{{ tag }}</text>
+              <text class="selected-tag-remove" @click="removeTag(index)">×</text>
+            </view>
+          </view>
+
+          <!-- 层二：自定义输入 -->
+          <view class="tag-input-row">
+            <text class="tag-input-label">添加标签</text>
+            <input
+              class="tag-input"
+              v-model="newTag"
+              placeholder="自定义标签"
+              placeholder-class="tag-placeholder"
+              maxlength="10"
+              confirm-type="done"
+              @confirm="addTag"
+            />
+            <text class="tag-add-btn" @click="addTag">+</text>
+          </view>
+
+          <!-- 层三：预设快捷标签 -->
+          <view class="preset-tags">
+            <view
+              v-for="tag in presetTags"
+              :key="tag"
+              class="preset-tag"
+              :class="{ 'preset-tag-active': formData.tags.includes(tag) }"
+              hover-class="preset-tag-hover"
+              @click="addPresetTag(tag)"
+            >
+              <text class="preset-tag-text">{{ tag }}</text>
             </view>
           </view>
         </view>
@@ -100,11 +148,12 @@
         <view class="form-item">
           <view class="default-row" @click="formData.isDefault = !formData.isDefault">
             <view class="default-left">
-              <text class="form-label">设为默认档案</text>
-              <text class="default-hint">默认档案将优先显示</text>
+              <text class="form-label" style="margin-bottom: 0;">设为默认档案</text>
+              <text class="default-hint">默认档案将在「我的」页面优先展示</text>
             </view>
-            <view class="checkbox" :class="{ checked: formData.isDefault }">
-              <text v-if="formData.isDefault" class="material-symbols-outlined check-icon">check</text>
+            <!-- Switch 样式开关 -->
+            <view class="switch-track" :class="{ 'switch-on': formData.isDefault }">
+              <view class="switch-thumb" :class="{ 'switch-thumb-on': formData.isDefault }"></view>
             </view>
           </view>
         </view>
@@ -143,7 +192,6 @@
 import { ref, reactive, onMounted } from 'vue'
 import ZenHeader from '@/components/ZenHeader/ZenHeader.vue'
 import { useArchiveStore } from '@/store/useArchiveStore'
-import type { Archive } from '@/store/useArchiveStore'
 
 // 强制隐藏原生 TabBar
 onMounted(() => {
@@ -165,172 +213,167 @@ const isLoading = ref(false)
 // 今天的日期（用于限制日期选择器）
 const todayDate = ref('')
 
-// 关系标签预设
-const relationTags = ['本人', '伴侣', '子女', '父母', '朋友', '其他']
+// 预设标签
+const presetTags = ['本人', '伴侣', '子女', '父母', '朋友', '客户', '其他']
+
+// 自定义标签输入
+const newTag = ref('')
 
 // 表单数据
 const formData = reactive({
   name: '',
   gender: 1 as 0 | 1,
-  birthDate: '',
-  birthTime: '',
-  relation: '本人',
+  birthDate: '2000-01-01',
+  birthTime: '12:00',
+  isLunar: false,
+  tags: [] as string[],
   isDefault: false
 })
 
-// 页面加载
+// ==================== 标签方法 ====================
+
+/** 添加自定义标签（回车或点击+） */
+const addTag = () => {
+  const val = newTag.value.trim()
+  if (!val) return
+  if (formData.tags.includes(val)) {
+    newTag.value = ''
+    return
+  }
+  if (formData.tags.length >= 8) {
+    uni.showToast({ title: '最多添加 8 个标签', icon: 'none' })
+    return
+  }
+  formData.tags.push(val)
+  newTag.value = ''
+}
+
+/** 点击预设标签：已有则移除，没有则添加 */
+const addPresetTag = (tag: string) => {
+  const idx = formData.tags.indexOf(tag)
+  if (idx !== -1) {
+    formData.tags.splice(idx, 1)
+  } else {
+    if (formData.tags.length >= 8) {
+      uni.showToast({ title: '最多添加 8 个标签', icon: 'none' })
+      return
+    }
+    formData.tags.push(tag)
+  }
+}
+
+/** 删除已选标签 */
+const removeTag = (index: number) => {
+  formData.tags.splice(index, 1)
+}
+
+// ==================== 页面初始化 ====================
 onMounted(() => {
-  // 设置今天的日期
   const today = new Date()
   todayDate.value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
-  
-  // 获取页面参数
+
   const pages = getCurrentPages()
   const currentPage = pages[pages.length - 1] as any
   const options = currentPage.options || {}
-  
+
   console.log('📋 [archive/add] 页面参数:', options)
-  
-  // 判断是否为编辑模式
+
   if (options.id) {
     isEditMode.value = true
     editArchiveId.value = options.id
-    
-    // 从 Store 中找出对应档案并回显数据
+
     const archive = archiveStore.archives.find(item => item.id === options.id)
-    
+
     if (archive) {
       console.log('✅ [archive/add] 找到档案，回显数据:', archive)
-      
       formData.name = archive.name
       formData.gender = archive.gender
       formData.birthDate = archive.birthDate
       formData.birthTime = archive.birthTime
-      formData.relation = archive.relation || '本人'
+      formData.isLunar = archive.isLunar ?? false
+      // 兼容旧数据：tags 可能不存在
+      formData.tags = Array.isArray(archive.tags) ? [...archive.tags] : []
       formData.isDefault = archive.isDefault
     } else {
       console.error('❌ [archive/add] 档案不存在:', options.id)
-      
-      uni.showToast({
-        title: '档案不存在',
-        icon: 'error',
-        duration: 2000
-      })
-      
-      // 返回上一页
-      setTimeout(() => {
-        uni.navigateBack()
-      }, 2000)
+      uni.showToast({ title: '档案不存在', icon: 'error', duration: 2000 })
+      setTimeout(() => uni.navigateBack(), 2000)
     }
   } else {
     console.log('📝 [archive/add] 新建模式')
     isEditMode.value = false
+    if (archiveStore.archives.length === 0) {
+      formData.isDefault = true
+    }
   }
 })
 
-// 日期选择器变化
+// ==================== 表单操作 ====================
+
 const onDateChange = (e: any) => {
   formData.birthDate = e.detail.value
-  console.log('📅 [archive/add] 选择日期:', formData.birthDate)
 }
 
-// 时间选择器变化
 const onTimeChange = (e: any) => {
   formData.birthTime = e.detail.value
-  console.log('⏰ [archive/add] 选择时间:', formData.birthTime)
 }
 
-// 表单验证
 const validateForm = (): boolean => {
   if (!formData.name.trim()) {
-    uni.showToast({
-      title: '请输入姓名',
-      icon: 'none',
-      duration: 1500
-    })
+    uni.showToast({ title: '请输入姓名', icon: 'none', duration: 1500 })
     return false
   }
-
   if (!formData.birthDate) {
-    uni.showToast({
-      title: '请选择出生日期',
-      icon: 'none',
-      duration: 1500
-    })
+    uni.showToast({ title: '请选择出生日期', icon: 'none', duration: 1500 })
     return false
   }
-
   if (!formData.birthTime) {
-    uni.showToast({
-      title: '请选择出生时间',
-      icon: 'none',
-      duration: 1500
-    })
+    uni.showToast({ title: '请选择出生时间', icon: 'none', duration: 1500 })
     return false
   }
-
   return true
 }
 
-// 提交表单
 const handleSubmit = async () => {
-  // 表单验证
-  if (!validateForm()) {
-    return
-  }
-
+  if (!validateForm()) return
   isLoading.value = true
 
   try {
+    const payload = {
+      name: formData.name.trim(),
+      gender: formData.gender,
+      birthDate: formData.birthDate,
+      birthTime: formData.birthTime,
+      isLunar: formData.isLunar,
+      tags: [...formData.tags],
+      isDefault: formData.isDefault
+    }
+
     if (isEditMode.value) {
-      // 编辑模式：更新档案
       console.log('📝 [archive/add] 更新档案:', editArchiveId.value)
-      
-      await archiveStore.updateArchive(editArchiveId.value, {
-        name: formData.name.trim(),
-        gender: formData.gender,
-        birthDate: formData.birthDate,
-        birthTime: formData.birthTime,
-        relation: formData.relation,
-        isDefault: formData.isDefault
-      })
-
-      // 设置为当前档案
+      await archiveStore.updateArchive(editArchiveId.value, payload)
       archiveStore.currentArchiveId = editArchiveId.value
-
       console.log('✅ [archive/add] 档案更新成功')
     } else {
-      // 新建模式：添加档案
       console.log('📝 [archive/add] 添加档案')
-      
-      const newArchive = await archiveStore.addArchive({
-        name: formData.name.trim(),
-        gender: formData.gender,
-        birthDate: formData.birthDate,
-        birthTime: formData.birthTime,
-        relation: formData.relation,
-        isDefault: formData.isDefault
-      })
-
-      // 设置为当前档案
+      const newArchive = await archiveStore.addArchive(payload)
       if (newArchive) {
         archiveStore.currentArchiveId = newArchive.id
-        console.log('✅ [archive/add] 档案添加成功，已设为当前档案:', newArchive.id)
+        console.log('✅ [archive/add] 档案添加成功:', newArchive.id)
       }
     }
 
-    // 返回上一页
-    setTimeout(() => {
-      uni.navigateBack()
-    }, 500)
+    // 保存成功后直接返回，无需确认提示
+    // 上一页的 onShow 会自动刷新数据，用户立即感知到变更
+    uni.navigateBack()
   } catch (error) {
     console.error('❌ [archive/add] 保存失败:', error)
+    uni.showToast({ title: '保存失败，请重试', icon: 'none', duration: 1500 })
   } finally {
     isLoading.value = false
   }
 }
 
-// 删除档案
 const handleDelete = () => {
   uni.showModal({
     title: '确认删除',
@@ -340,18 +383,8 @@ const handleDelete = () => {
     cancelText: '取消',
     success: async (res) => {
       if (res.confirm) {
-        console.log('🗑️ [archive/add] 删除档案:', editArchiveId.value)
-        
         const success = await archiveStore.deleteArchive(editArchiveId.value)
-        
-        if (success) {
-          console.log('✅ [archive/add] 档案删除成功')
-          
-          // 返回上一页
-          setTimeout(() => {
-            uni.navigateBack()
-          }, 500)
-        }
+        if (success) setTimeout(() => uni.navigateBack(), 500)
       }
     }
   })
@@ -470,6 +503,44 @@ const handleDelete = () => {
   font-weight: 500;
 }
 
+/* 出生日期标签行（含历法切换） */
+.date-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24rpx;
+}
+
+/* 公历/农历胶囊切换 */
+.calendar-toggle {
+  display: flex;
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 32rpx;
+  padding: 4rpx;
+  gap: 0;
+}
+
+.toggle-option {
+  padding: 8rpx 24rpx;
+  border-radius: 28rpx;
+  transition: all 0.2s ease;
+}
+
+.toggle-active {
+  background: var(--zen-cinnabar);
+}
+
+.toggle-text {
+  font-size: 22rpx;
+  color: var(--zen-light-gray);
+  letter-spacing: 1rpx;
+}
+
+.toggle-active .toggle-text {
+  color: #FFFFFF;
+  font-weight: 500;
+}
+
 /* 选择器 */
 .picker-wrapper {
   display: flex;
@@ -511,41 +582,108 @@ const handleDelete = () => {
   line-height: 1.6;
 }
 
-/* 标签组 */
-.tag-group {
+/* ==================== 标签区域 ==================== */
+
+/* 层一：已选标签 */
+.selected-tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 16rpx;
+  gap: 12rpx;
+  margin-bottom: 24rpx;
 }
 
-.tag-item {
-  padding: 16rpx 32rpx;
-  background: var(--zen-white);
-  border: 1px solid var(--zen-border);
-  border-radius: 24rpx;
-  transition: all 0.3s ease;
+.selected-tag {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  padding: 10rpx 20rpx;
+  background: rgba(178, 58, 52, 0.12);
+  border: 1px solid rgba(178, 58, 52, 0.5);
+  border-radius: 32rpx;
 }
 
-.tag-item.active {
-  background: var(--zen-cinnabar-light);
-  border-color: var(--zen-cinnabar);
-}
-
-.tag-hover {
-  opacity: 0.8;
-}
-
-.tag-text {
-  font-size: 26rpx;
-  color: var(--zen-gray);
-}
-
-.tag-item.active .tag-text {
+.selected-tag-text {
+  font-size: 24rpx;
   color: var(--zen-cinnabar);
   font-weight: 500;
 }
 
-/* 默认档案选项 */
+.selected-tag-remove {
+  font-size: 28rpx;
+  color: var(--zen-cinnabar);
+  line-height: 1;
+  opacity: 0.7;
+  padding: 0 4rpx;
+}
+
+/* 层二：自定义输入行 */
+.tag-input-row {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  padding: 20rpx 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  margin-bottom: 24rpx;
+}
+
+.tag-input-label {
+  font-size: 26rpx;
+  color: var(--zen-light-gray);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.tag-input {
+  flex: 1;
+  height: 60rpx;
+  font-size: 26rpx;
+  color: var(--zen-ink);
+  background: transparent;
+  padding: 0 8rpx;
+}
+
+.tag-add-btn {
+  font-size: 40rpx;
+  color: var(--zen-cinnabar);
+  line-height: 1;
+  padding: 0 8rpx;
+  opacity: 0.8;
+  flex-shrink: 0;
+}
+
+/* 层三：预设快捷标签 */
+.preset-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+}
+
+.preset-tag {
+  padding: 10rpx 24rpx;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 32rpx;
+  transition: all 0.2s ease;
+}
+
+.preset-tag-active {
+  border-color: rgba(178, 58, 52, 0.4);
+  background: rgba(178, 58, 52, 0.06);
+}
+
+.preset-tag-hover {
+  opacity: 0.6;
+}
+
+.preset-tag-text {
+  font-size: 22rpx;
+  color: var(--zen-light-gray);
+}
+
+.preset-tag-active .preset-tag-text {
+  color: var(--zen-cinnabar);
+}
+
+/* 默认档案开关 */
 .default-row {
   display: flex;
   align-items: center;
@@ -564,26 +702,36 @@ const handleDelete = () => {
   margin-top: 8rpx;
 }
 
-.checkbox {
-  width: 48rpx;
-  height: 48rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--zen-border);
-  border-radius: 8rpx;
-  transition: all 0.3s ease;
+/* Switch 轨道 */
+.switch-track {
+  width: 96rpx;
+  height: 52rpx;
+  border-radius: 26rpx;
+  background: var(--zen-border);
+  position: relative;
+  transition: background 0.25s ease;
+  flex-shrink: 0;
 }
 
-.checkbox.checked {
-  background-color: var(--zen-cinnabar);
-  border-color: var(--zen-cinnabar);
+.switch-track.switch-on {
+  background: var(--zen-cinnabar);
 }
 
-.check-icon {
-  font-size: 32rpx;
-  color: var(--zen-white);
-  font-weight: 500;
+/* Switch 滑块 */
+.switch-thumb {
+  position: absolute;
+  top: 6rpx;
+  left: 6rpx;
+  width: 40rpx;
+  height: 40rpx;
+  border-radius: 50%;
+  background: #FFFFFF;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.15);
+  transition: left 0.25s ease;
+}
+
+.switch-thumb.switch-thumb-on {
+  left: 50rpx;
 }
 
 /* 按钮容器 */

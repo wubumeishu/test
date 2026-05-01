@@ -51,9 +51,15 @@ const emit = defineEmits<{
   history: []
 }>()
 
-// 返回上一页
+// 返回上一页，如果页面栈只有一层则跳回「我的」Tab
 const handleBack = () => {
-  uni.navigateBack()
+  const pages = getCurrentPages()
+  if (pages.length > 1) {
+    uni.navigateBack()
+  } else {
+    // 页面栈只有一层，无法 navigateBack，跳回「我的」页
+    uni.switchTab({ url: '/pages/mine/mine' })
+  }
 }
 
 // 触发菜单事件

@@ -50,6 +50,13 @@ class Archive(Base, TimestampMixin):
         comment="历法类型 (solar=公历, lunar=农历)"
     )
     
+    is_lunar: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        comment="是否为农历 (True=农历, False=公历)，与 calendar_type 保持同步"
+    )
+    
     birth_year: Mapped[int] = mapped_column(
         Integer,
         nullable=False,

@@ -24,7 +24,7 @@
           <text class="back-icon">←</text>
         </view>
         <view class="header-info">
-          <text class="name-text">{{ baziStore.currentBaziData.name }}</text>
+          <text class="name-text" :style="nameLetterSpacing">{{ displayName }}</text>
           <text class="gender-text">{{ genderText }}</text>
         </view>
       </view>
@@ -78,7 +78,7 @@
               <text 
                 class="gan-text" 
                 :class="{ 'highlight': pillar.isDayMaster }"
-                :style="{ color: pillar.isDayMaster ? '#C0392B' : getWuxingColor(pillar.gan) }"
+                :style="{ color: getWuxingColor(pillar.gan) }"
               >
                 {{ pillar.gan }}
               </text>
@@ -151,7 +151,10 @@
       <view class="daymaster-card glass-card">
         <view class="daymaster-content">
           <text class="daymaster-label">日主</text>
-          <text class="daymaster-char">{{ baziStore.currentBaziData.day_master }}</text>
+          <text 
+            class="daymaster-char"
+            :style="{ color: getWuxingColor(baziStore.currentBaziData.day_master) }"
+          >{{ baziStore.currentBaziData.day_master }}</text>
           <text class="daymaster-wuxing">{{ baziStore.currentBaziData.day_master_wuxing }}命</text>
         </view>
       </view>
@@ -222,10 +225,31 @@ import { useBaziStore } from '@/store/useBaziStore'
 // Store
 const baziStore = useBaziStore()
 
+// 命主姓名：优先取 baseInfo（排盘时已同步），兜底 currentBaziData.name，再兜底「未知」
+const displayName = computed(() => {
+  return baziStore.baseInfo?.name
+    || baziStore.currentBaziData?.name
+    || '未知'
+})
+
+// 短名字（≤2字）加大字间距，匹配整体排版美学
+const nameLetterSpacing = computed(() => {
+  const len = displayName.value.length
+  if (len <= 1) return { letterSpacing: '20rpx' }
+  if (len <= 2) return { letterSpacing: '12rpx' }
+  return { letterSpacing: '6rpx' }
+})
+
 // 性别文本
 const genderText = computed(() => {
   if (!baziStore.currentBaziData) return ''
   return baziStore.currentBaziData.gender === 1 ? '乾造' : '坤造'
+})
+
+// 日柱标题：根据性别显示「元男」或「元女」
+const dayPillarTitle = computed(() => {
+  if (!baziStore.currentBaziData) return '日柱'
+  return baziStore.currentBaziData.gender === 1 ? '元男' : '元女'
 })
 
 // 四柱列表（按照现代习惯：从左到右 = 年月日时）
@@ -260,7 +284,7 @@ const pillarList = computed(() => {
       isDayMaster: false
     },
     {
-      title: '日柱',
+      title: dayPillarTitle.value,
       gan: data.day_pillar.gan,
       zhi: data.day_pillar.zhi,
       nayin: data.day_pillar.nayin,
@@ -366,16 +390,9 @@ onMounted(() => {
   })
 })
 
-// 返回上一页
+// 返回上一页（兼容从历史记录或排盘准备页进入的场景）
 function goBack() {
-  uni.navigateBack({
-    fail: () => {
-      // 如果没有上一页,跳转到首页
-      uni.switchTab({
-        url: '/pages/index/index'
-      })
-    }
-  })
+  uni.navigateBack()
 }
 </script>
 
@@ -777,11 +794,9 @@ function goBack() {
   letter-spacing: 2rpx;
 }
 
-/* 神煞 - 固定高度防止错位 */
+/* 神煞 - 自适应高度，flex 换行 */
 .shensha-cell {
   padding: 12rpx 8rpx;
-  min-height: 120rpx;
-  background: rgba(0, 0, 0, 0.01);
 }
 
 .shensha-box {
@@ -789,20 +804,7 @@ function goBack() {
   flex-wrap: wrap;
   justify-content: center;
   align-items: flex-start;
-  align-content: flex-start;
-  height: 120rpx; /* 稍微增加一点高度，增加手指触控滑动的面积 */
-  margin-top: 12rpx;
   gap: 6rpx;
-  overflow-y: auto; /* 开启垂直滑动 */
-  -webkit-overflow-scrolling: touch; /* 移动端惯性滑动 */
-}
-
-/* 彻底隐藏由于开启滑动而出现的丑陋滚动条 */
-.shensha-box::-webkit-scrollbar {
-  display: none;
-  width: 0;
-  height: 0;
-  color: transparent;
 }
 
 .ss-tag {
@@ -831,6 +833,7 @@ function goBack() {
   display: flex;
   flex-direction: column;
   align-items: center;
+  width: 100%;
   gap: 16rpx;
 }
 
@@ -838,22 +841,31 @@ function goBack() {
   font-size: 24rpx;
   color: #8E8E93;
   letter-spacing: 6rpx;
+  text-align: center;
+  display: block;
+  width: 100%;
 }
 
 .daymaster-char {
   font-family: 'Noto Serif SC', serif;
-  font-size: 120rpx;
+  font-size: 140rpx;
   font-weight: 900;
-  color: #C0392B;
   line-height: 1;
-  letter-spacing: 8rpx;
+  letter-spacing: 0;
+  text-align: center;
+  display: block;
+  width: 100%;
 }
 
 .daymaster-wuxing {
   font-family: 'Noto Serif SC', serif;
-  font-size: 32rpx;
-  color: #1A1A1A;
-  letter-spacing: 8rpx;
+  font-size: 36rpx;
+  font-weight: 400;
+  color: #8E8E93;
+  letter-spacing: 4rpx;
+  text-align: center;
+  display: block;
+  width: 100%;
 }
 
 /* ==================== 五行能量进度条 ==================== */
@@ -991,7 +1003,7 @@ function goBack() {
 .empty-button {
   width: 400rpx;
   height: 88rpx;
-  background-color: #1A1A1A;
+  background-color: #B23A34;
   border: none;
   border-radius: 44rpx;
   display: flex;

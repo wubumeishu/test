@@ -24,7 +24,7 @@
         </view>
         <view class="info-row">
           <text class="label">关系:</text>
-          <text class="value">{{ currentArchive.relation }}</text>
+          <text class="value">{{ currentArchive.tags?.join(', ') || '—' }}</text>
         </view>
         <view class="info-row">
           <text class="label">档案ID:</text>

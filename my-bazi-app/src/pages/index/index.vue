@@ -7,27 +7,35 @@
         <ZenCard padding="0" class="top-banner">
           <view class="banner-left">
             <view class="ink-bg">
-              <text class="material-symbols-outlined ink-icon">cloud</text>
+              <!-- 月相图片：有图时显示，加载失败或无图时回退 cloud 图标 -->
+              <image
+                v-if="moonImageSrc"
+                class="moon-phase-img"
+                :src="moonImageSrc"
+                mode="aspectFit"
+                @error="onMoonImageError"
+              />
+              <text v-else class="material-symbols-outlined ink-icon">cloud</text>
             </view>
-            
+
             <view class="banner-info">
               <view v-if="isSolarTerm">
                 <text class="tag-text">二十四节气 · 第{{ solarTermIndex }}</text>
-                <text class="date-text">{{ lunarDateStr }} · 公历 {{ todayStr }}</text>
+                <text class="date-text">{{ displayLunarDate }} · 公历 {{ displaySolarDate }}</text>
               </view>
               <view v-else>
-                <text class="tag-text">月影禅心 · {{ moonPhaseName }}</text>
-                <text class="date-text">{{ lunarDateStr }} · {{ weekDayStr }}</text>
+                <text class="tag-text">月影禅心 · {{ yueXiangText }}</text>
+                <text class="date-text">{{ displayLunarDate }} · {{ displayWeekDay }}</text>
               </view>
-              
+
               <view class="quote-area">
-                <text class="quote-text">{{ dailyQuote }}</text>
+                <text class="quote-text">{{ currentShortQuote }}</text>
               </view>
             </view>
           </view>
-          
+
           <view class="banner-right">
-            <text class="writing-vertical brush-font">{{ isSolarTerm ? currentSolarTerm : lunarMonthDay }}</text>
+            <text class="writing-vertical brush-font">{{ solarChineseDateDisplay }}</text>
           </view>
         </ZenCard>
       </section>
@@ -43,11 +51,18 @@
             <text class="score-label">今日运势指数</text>
           </view>
         </view>
-        
+
+        <!-- 干支日期：分段渲染，间隔点单独着色 -->
         <view class="calendar-info">
-          <text class="ganzhi-text">{{ ganzhiDate }}</text>
+          <view class="ganzhi-row">
+            <text class="ganzhi-seg">{{ displayBaziParts[0] }}</text>
+            <text class="ganzhi-dot">·</text>
+            <text class="ganzhi-seg">{{ displayBaziParts[1] }}</text>
+            <text class="ganzhi-dot">·</text>
+            <text class="ganzhi-seg">{{ displayBaziParts[2] }}</text>
+          </view>
           <view class="gold-divider"></view>
-          <text class="advice-text">秋水长天，神安则泰。岁运交替，宜守成、省身、积德。</text>
+          <text class="advice-text">{{ currentLongQuote }}</text>
         </view>
       </section>
 
@@ -57,7 +72,12 @@
             <text class="material-symbols-outlined grid-icon">{{ item.icon }}</text>
             <text class="grid-label">{{ item.label }}</text>
             <view class="dots-row">
-              <view class="dot" v-for="i in 4" :key="i" :class="{ active: i <= item.score }"></view>
+              <view
+                class="dot"
+                v-for="i in 5"
+                :key="i"
+                :class="{ active: i <= item.level }"
+              ></view>
             </view>
           </ZenCard>
         </view>
@@ -67,21 +87,29 @@
         <ZenCard padding="0" class="almanac-card">
           <view class="almanac-header">
             <text class="almanac-en">Traditional Calendar</text>
-            <text class="almanac-lunar">{{ lunarMonthDay }}</text>
+            <text class="almanac-lunar">{{ lunarMonthDay }} · {{ yueXiangText }}</text>
           </view>
           <view class="almanac-body">
             <view class="almanac-col">
-              <text class="col-tag">宜</text>
+              <text class="col-tag col-tag--yi">宜</text>
               <view class="col-content">
-                <text class="luck-text">纳采</text>
-                <text class="luck-text">乞巧</text>
+                <text
+                  v-for="item in dayYiList"
+                  :key="item"
+                  class="luck-text"
+                >{{ item }}</text>
+                <text v-if="dayYiList.length === 0" class="luck-text luck-text--empty">—</text>
               </view>
             </view>
             <view class="almanac-col">
-              <text class="col-tag">忌</text>
+              <text class="col-tag col-tag--ji">忌</text>
               <view class="col-content">
-                <text class="unluck-text">开市</text>
-                <text class="unluck-text">动土</text>
+                <text
+                  v-for="item in dayJiList"
+                  :key="item"
+                  class="unluck-text"
+                >{{ item }}</text>
+                <text v-if="dayJiList.length === 0" class="unluck-text unluck-text--empty">—</text>
               </view>
             </view>
           </view>
@@ -117,30 +145,134 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import ZenHeader from '@/components/ZenHeader/ZenHeader.vue'
 import ZenCard from '@/components/ZenCard/ZenCard.vue'
 import ZenTabBar from '@/components/ZenTabBar/ZenTabBar.vue'
-import { Solar, Lunar } from 'lunar-javascript'
+import { Solar } from 'lunar-javascript'
+import { useArchiveStore } from '@/store/useArchiveStore'
 
-// --- 状态逻辑 ---
-const isSolarTerm = ref(true)
-const currentSolarTerm = ref('立秋')
-const solarTermIndex = ref(13)
-const lunarMonthDay = ref('七月初七')
-const lunarDateStr = ref('八月初七')
-const moonPhaseName = ref('蛾眉月')
-const todayStr = ref('08.07')
-const weekDayStr = ref('星期三')
-const ganzhiDate = ref('甲辰年 · 壬申月 · 癸卯日')
-const dailyQuote = ref('“秋风起，宜敛神。暑气渐消，万物从容。”')
-const fortuneScore = ref(88)
+// --- 档案 Store ---
+const archiveStore = useArchiveStore()
 
-const fortuneDimensions = ref([
-  { label: '姻缘', icon: 'favorite', score: 3 },
-  { label: '财富', icon: 'potted_plant', score: 4 },
-  { label: '事业', icon: 'self_improvement', score: 2 }
+// --- 实时日期状态 ---
+const displaySolarDate     = ref('')          // 例：5月1日
+const displayWeekDay       = ref('')          // 例：星期五
+const displayLunarDate     = ref('')          // 例：三月廿七
+const displayBaziParts     = ref<string[]>(['', '', ''])  // ['丙午年','壬辰月','乙亥日']
+const solarChineseDateDisplay = ref('')       // 例：五月一日（公历汉字，用于竖排）
+
+// --- 其他页面状态 ---
+const isSolarTerm      = ref(false)
+const currentSolarTerm = ref('')
+const solarTermIndex   = ref(0)
+const lunarMonthDay    = ref('')
+const moonPhaseName    = ref('')   // 月相名（getYueXiang），如：蛾眉、望
+const yueXiang         = ref('')   // 同上，用于 almanac-header 显示
+const yueXiangText     = ref('')   // 同上，语义化别名，供模板绑定
+const moonImageSrc     = ref('')   // 月相图片路径
+const dayYiList        = ref<string[]>([])  // 宜，取前两项
+const dayJiList        = ref<string[]>([])  // 忌，取前两项
+
+// ── 月相图片映射（农历日 1-30 → 8 种基础月相图）──
+const getMoonPhaseImage = (day: number): string => {
+  const base = '../../static/moon/'
+  if (day === 1 || day === 30) return `${base}phase-1.svg`  // 新月 / 朔 / 晦
+  if (day >= 2  && day <= 6)   return `${base}phase-2.svg`  // 蛾眉月（上升）
+  if (day === 7 || day === 8)  return `${base}phase-3.svg`  // 上弦月
+  if (day >= 9  && day <= 14)  return `${base}phase-4.svg`  // 盈凸月
+  if (day === 15 || day === 16) return `${base}phase-5.svg` // 满月 / 望
+  if (day >= 17 && day <= 21)  return `${base}phase-6.svg`  // 亏凸月
+  if (day === 22 || day === 23) return `${base}phase-7.svg` // 下弦月
+  if (day >= 24 && day <= 29)  return `${base}phase-8.svg`  // 残月（蛾眉亏）
+  return `${base}phase-1.svg`  // 兜底
+}
+
+// 月相图片加载失败时回退到占位符
+const onMoonImageError = () => {
+  moonImageSrc.value = ''
+}
+// ==================== 禅意语录库 ====================
+const shortQuotes = [
+  '风起，宜敛神',
+  '水复，宜静心',
+  '云散，且徐行',
+  '月明，宜远望',
+  '花开，且从容',
+]
+const longQuotes = [
+  '神安则泰，心定则宁。今日宜顺势而为。',
+  '万物有时，不可强求。留一份空白，得一份自在。',
+  '行到水穷处，坐看云起时。心境澄明，无往不利。',
+  '竹密不妨流水过，山高岂碍白云飞。心怀坦荡，好运自来。',
+]
+
+const currentShortQuote = ref(shortQuotes[0])
+const currentLongQuote  = ref(longQuotes[0])
+
+const dailyQuote = currentShortQuote  // 保持向后兼容，模板直接用 currentShortQuote
+
+// ==================== 千人千面运势算法 ====================
+
+/**
+ * 生成每日种子：将出生日期与今日日期拼接后做 djb2 哈希
+ * 同一人同一天结果恒定，不同人或不同天结果不同
+ */
+const getDailySeed = (birthDate: string): number => {
+  const today = new Date().toISOString().split('T')[0]
+  const str = `${birthDate}-${today}`
+  let hash = 0
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) - hash) + str.charCodeAt(i)
+    hash |= 0  // 转为 32 位整数
+  }
+  return Math.abs(hash)
+}
+
+// 运势指数（60–98），无默认档案时显示固定值 88
+const fortuneScore = computed<number>(() => {
+  const archive = archiveStore.defaultArchive
+  if (!archive) return 88
+  const seed = getDailySeed(archive.birthDate)
+  return 60 + (seed % 39)
+})
+
+// 事业点数（1–5）
+const careerLevel = computed<number>(() => {
+  const archive = archiveStore.defaultArchive
+  if (!archive) return 3
+  const seed = getDailySeed(archive.birthDate)
+  return (seed % 5) + 1
+})
+
+// 财富点数（1–5）
+const wealthLevel = computed<number>(() => {
+  const archive = archiveStore.defaultArchive
+  if (!archive) return 4
+  const seed = getDailySeed(archive.birthDate)
+  return ((seed >> 1) % 5) + 1
+})
+
+// 姻缘点数（1–5）
+const loveLevel = computed<number>(() => {
+  const archive = archiveStore.defaultArchive
+  if (!archive) return 2
+  const seed = getDailySeed(archive.birthDate)
+  return ((seed >> 2) % 5) + 1
+})
+
+// 宫格运势数据（由 computed 驱动，响应 defaultArchive 变化）
+const fortuneDimensions = computed(() => [
+  { label: '事业', icon: 'self_improvement', level: careerLevel.value },
+  { label: '财富', icon: 'potted_plant',     level: wealthLevel.value },
+  { label: '姻缘', icon: 'favorite',         level: loveLevel.value  },
 ])
+
+const WEEK_NAMES = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']
+const CHINESE_MONTHS = ['一','二','三','四','五','六','七','八','九','十','十一','十二']
+const CHINESE_DAYS = ['','一','二','三','四','五','六','七','八','九','十',
+                      '十一','十二','十三','十四','十五','十六','十七','十八','十九','二十',
+                      '二十一','二十二','二十三','二十四','二十五','二十六','二十七','二十八','二十九','三十','三十一']
 
 // 菜单点击事件
 const handleMenu = () => {
@@ -149,27 +281,80 @@ const handleMenu = () => {
 
 // 跳转到测试页面
 const goToTest = () => {
-  uni.navigateTo({
-    url: '/pages/test/test'
-  })
+  uni.navigateTo({ url: '/pages/test/test' })
 }
 
 onMounted(() => {
-  // 这里可以实时计算节气和农历
-  const now = new Date()
-  const solar = Solar.fromDate(now)
-  const lunar = solar.getLunar()
-  
-  lunarMonthDay.value = `${lunar.getMonthInChinese()}月${lunar.getDayInChinese()}`
-  ganzhiDate.value = `${lunar.getYearInGanZhi()}年 · ${lunar.getMonthInGanZhi()}月 · ${lunar.getDayInGanZhi()}日`
-  
-  // 简单节气检测逻辑
+  const now   = new Date()
+  const solar = Solar.fromDate(now) as any
+  const lunar = solar.getLunar() as any
+
+  // ── 公历 ──
+  const m = now.getMonth() + 1
+  const d = now.getDate()
+  displaySolarDate.value = `${m}月${d}日`
+  // 公历汉字格式，用于竖排书法位置，例：五月一日
+  const solarChineseDate = `${CHINESE_MONTHS[m - 1]}月${CHINESE_DAYS[d]}日`
+  solarChineseDateDisplay.value = solarChineseDate
+
+  // ── 星期 ──
+  displayWeekDay.value = WEEK_NAMES[now.getDay()]
+
+  // ── 农历 ──
+  const lunarStr = `${lunar.getMonthInChinese()}月${lunar.getDayInChinese()}`
+  displayLunarDate.value = lunarStr
+  lunarMonthDay.value    = lunarStr
+
+  // ── 月相 & 黄历宜忌 ──
+  const lunarDay = lunar.getDay()           // 农历数字日（1-30），用于图片映射
+  const xiang = lunar.getYueXiang()
+  moonPhaseName.value  = xiang
+  yueXiang.value       = xiang
+  yueXiangText.value   = xiang
+  moonImageSrc.value   = getMoonPhaseImage(lunarDay)
+  dayYiList.value = (lunar.getDayYi() as string[]).slice(0, 2)
+  dayJiList.value = (lunar.getDayJi() as string[]).slice(0, 2)
+
+  // ── 干支（分段，供模板单独渲染间隔点颜色）──
+  const yearGz  = lunar.getYearInGanZhi()
+  const monthGz = lunar.getMonthInGanZhi()
+  const dayGz   = lunar.getDayInGanZhi()
+  displayBaziParts.value = [`${yearGz}年`, `${monthGz}月`, `${dayGz}日`]
+
+  // ── 节气检测 ──
   const term = lunar.getJieQi()
   if (term) {
-    isSolarTerm.value = true
+    isSolarTerm.value      = true
     currentSolarTerm.value = term
+    const allTerms = ['小寒','大寒','立春','雨水','惊蛰','春分','清明','谷雨',
+                      '立夏','小满','芒种','夏至','小暑','大暑','立秋','处暑',
+                      '白露','秋分','寒露','霜降','立冬','小雪','大雪','冬至']
+    solarTermIndex.value = allTerms.indexOf(term) + 1
   } else {
     isSolarTerm.value = false
+  }
+
+  // ── 禅意语录：基于 seed 随机抽取 ──
+  // seed 优先使用默认档案的出生日期，否则用今日日期字符串
+  const archive = archiveStore.defaultArchive
+  const seedSource = archive
+    ? getDailySeed(archive.birthDate)
+    : (() => {
+        const today = now.toISOString().split('T')[0]
+        let h = 0
+        for (let i = 0; i < today.length; i++) {
+          h = ((h << 5) - h) + today.charCodeAt(i)
+          h |= 0
+        }
+        return Math.abs(h)
+      })()
+
+  currentShortQuote.value = shortQuotes[seedSource % shortQuotes.length]
+  currentLongQuote.value  = longQuotes[seedSource % longQuotes.length]
+
+  // 节气感知：今天是节气则强制覆盖短语录
+  if (term) {
+    currentShortQuote.value = `今日${term}，宜调息`
   }
 })
 </script>
@@ -221,6 +406,14 @@ onMounted(() => {
   font-size: 240rpx;
   transform: rotate(12deg);
   color: #333;
+}
+
+/* 月相图片：撑满 ink-bg 容器，保持透明度与背景装饰一致 */
+.moon-phase-img {
+  width: 220rpx;
+  height: 220rpx;
+  opacity: 0.25;
+  filter: sepia(0.3);
 }
 
 .tag-text {
@@ -340,11 +533,27 @@ onMounted(() => {
   text-align: center;
 }
 
-.ganzhi-text {
+/* 干支行：分段渲染，间隔点朱砂红半透明 */
+.ganzhi-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 2rpx;
+}
+
+.ganzhi-seg {
   font-family: 'Noto Serif SC', serif;
   font-size: 32rpx;
   font-weight: bold;
-  letter-spacing: 0.15em;
+  letter-spacing: 0.1em;
+  color: #1A1A1A;
+}
+
+.ganzhi-dot {
+  font-size: 28rpx;
+  color: rgba(178, 58, 52, 0.55);  /* 朱砂红，半透明 */
+  font-weight: 400;
+  padding: 0 4rpx;
 }
 
 .gold-divider {
@@ -461,6 +670,18 @@ onMounted(() => {
   letter-spacing: 0.2em;
 }
 
+/* 宜：主色调朱砂红 */
+.col-tag--yi {
+  color: #B23A34;
+  font-weight: 600;
+}
+
+/* 忌：暗灰绿，与宜形成视觉对比 */
+.col-tag--ji {
+  color: #5A7A5A;
+  font-weight: 600;
+}
+
 .luck-text {
   display: block;
   font-size: 36rpx;
@@ -470,6 +691,10 @@ onMounted(() => {
   letter-spacing: 0.2em;
 }
 
+.luck-text--empty {
+  color: rgba(178, 58, 52, 0.3);
+}
+
 .unluck-text {
   display: block;
   font-size: 36rpx;
@@ -477,6 +702,10 @@ onMounted(() => {
   color: rgba(51, 51, 51, 0.6);
   margin-bottom: 10rpx;
   letter-spacing: 0.2em;
+}
+
+.unluck-text--empty {
+  color: rgba(51, 51, 51, 0.2);
 }
 
 /* 底部引导卡片 */

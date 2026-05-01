@@ -84,7 +84,17 @@ export interface CalculateByDataRequest {
   birth_day: number
   birth_hour: number
   birth_minute: number
+  is_lunar?: boolean    // 是否农历，默认 false（公历）
   is_deep_analysis?: boolean
+}
+
+/**
+ * 命主基本信息（排盘前设置，供结果页和历史页读取）
+ */
+export interface BaseInfo {
+  name: string       // 命主姓名
+  gender: number     // 0=女, 1=男
+  archiveId?: string // 档案ID（档案排盘时有值）
 }
 
 // ==================== Store 定义 ====================
@@ -97,6 +107,11 @@ export const useBaziStore = defineStore('bazi', () => {
    */
   const isLoading = ref<boolean>(false)
   
+  /**
+   * 命主基本信息（排盘前/排盘后均可读取）
+   */
+  const baseInfo = ref<BaseInfo>({ name: '', gender: 1 })
+
   /**
    * 当前排盘数据 (最近一次排盘的完整结果)
    */
@@ -156,8 +171,21 @@ export const useBaziStore = defineStore('bazi', () => {
       // 保存到当前数据
       currentBaziData.value = response
 
+      // 同步命主基本信息（name 由后端从档案查出并写入响应）
+      baseInfo.value = {
+        name:      response.name,
+        gender:    response.gender,
+        archiveId: archiveId,
+      }
+
+      // 确保历史记录中 name 字段有值（兜底用 baseInfo）
+      const recordToSave: BaziCalculateResponse = {
+        ...response,
+        name: response.name || baseInfo.value.name,
+      }
+
       // 保存到历史记录
-      addToHistory(response)
+      addToHistory(recordToSave)
 
       // 保存到本地存储
       saveToLocalStorage()
@@ -236,8 +264,20 @@ export const useBaziStore = defineStore('bazi', () => {
       // 保存到当前数据
       currentBaziData.value = response
 
+      // 同步命主基本信息（name 优先取后端响应，兜底用入参 data.name）
+      baseInfo.value = {
+        name:   response.name || data.name,
+        gender: response.gender ?? data.gender,
+      }
+
+      // 确保历史记录中 name 字段有值（兜底用 baseInfo）
+      const recordToSave: BaziCalculateResponse = {
+        ...response,
+        name: response.name || baseInfo.value.name,
+      }
+
       // 保存到历史记录
-      addToHistory(response)
+      addToHistory(recordToSave)
 
       // 保存到本地存储
       saveToLocalStorage()
@@ -406,6 +446,55 @@ export const useBaziStore = defineStore('bazi', () => {
   }
 
   /**
+   * 从历史记录恢复完整排盘数据到 Store
+   * 兼容后端 RecordResponse 格式（five_elements_json 存四柱）和直接的 BaziCalculateResponse 格式
+   * @param raw 后端原始记录对象（含 five_elements_json）或完整的 BaziCalculateResponse
+   * @param resolvedName 已解析好的命主姓名（history.vue 传入）
+   */
+  function restoreHistoryData(raw: any, resolvedName?: string) {
+    try {
+      // 优先从 five_elements_json 取四柱数据（后端 /records 接口格式）
+      const fej = raw.five_elements_json ?? {}
+
+      // 构造符合 BaziCalculateResponse 的完整对象
+      const restored: BaziCalculateResponse = {
+        success:           true,
+        message:           '历史记录恢复',
+        record_id:         raw.record_id         ?? '',
+        name:              resolvedName           ?? raw.name ?? fej.name ?? '',
+        gender:            raw.gender             ?? fej.gender ?? 1,
+        solar_date:        fej.solar_date         ?? raw.solar_date         ?? '',
+        lunar_date:        fej.lunar_date         ?? raw.lunar_date         ?? '',
+        shengxiao:         fej.shengxiao          ?? raw.shengxiao          ?? '',
+        bazi_string:       fej.bazi_string        ?? raw.bazi_string        ?? raw.bazi_str ?? '',
+        year_pillar:       fej.year_pillar        ?? raw.year_pillar        ?? {},
+        month_pillar:      fej.month_pillar       ?? raw.month_pillar       ?? {},
+        day_pillar:        fej.day_pillar         ?? raw.day_pillar         ?? {},
+        hour_pillar:       fej.hour_pillar        ?? raw.hour_pillar        ?? {},
+        day_master:        fej.day_master         ?? raw.day_master         ?? '',
+        day_master_wuxing: fej.day_master_wuxing  ?? raw.day_master_wuxing  ?? '',
+        wuxing_strength:   fej.wuxing_strength    ?? raw.wuxing_strength    ?? { jin: 0, mu: 0, shui: 0, huo: 0, tu: 0 },
+        wuxing_summary:    fej.wuxing_summary     ?? raw.wuxing_summary     ?? { 金: 0, 木: 0, 水: 0, 火: 0, 土: 0 },
+        ai_report:         raw.ai_report_markdown ?? raw.ai_report          ?? null,
+      }
+
+      // 写入当前排盘数据
+      currentBaziData.value = restored
+
+      // 同步 baseInfo
+      baseInfo.value = {
+        name:      restored.name   || '未知',
+        gender:    restored.gender ?? 1,
+        archiveId: raw.archive_id  ?? undefined,
+      }
+
+      console.log('✅ [useBaziStore] 历史数据恢复成功，命主:', restored.name)
+    } catch (error) {
+      console.error('❌ [useBaziStore] 历史数据恢复失败:', error)
+    }
+  }
+
+  /**
    * 清空当前排盘数据
    */
   function clearCurrentBaziData() {
@@ -418,6 +507,7 @@ export const useBaziStore = defineStore('bazi', () => {
   return {
     // 状态
     isLoading,
+    baseInfo,
     currentBaziData,
     historyList,
 
@@ -429,6 +519,7 @@ export const useBaziStore = defineStore('bazi', () => {
     deleteHistoryItem,
     setCurrentBaziData,
     clearCurrentBaziData,
+    restoreHistoryData,
   }
 })
 

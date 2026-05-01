@@ -38,19 +38,30 @@
             hover-class="card-hover"
             @click="selectArchive(archive)"
           >
+            <!-- 第一行：姓名 + 性别 + 默认标签 -->
             <view class="archive-header">
-              <text class="archive-name">{{ archive.name }}</text>
-              <text class="archive-gender">{{ archive.gender === 1 ? '乾造' : '坤造' }}</text>
+              <view class="archive-name-row">
+                <text class="archive-name">{{ archive.name }}</text>
+                <text class="archive-gender-chip">{{ archive.gender === 1 ? '男' : '女' }}</text>
+              </view>
+              <view v-if="archive.isDefault" class="default-badge">
+                <text class="badge-text">默认</text>
+              </view>
             </view>
-            <view class="archive-info">
-              <text class="info-label">出生日期</text>
-              <text class="info-value">{{ archive.birthDate }} {{ archive.birthTime }}</text>
+
+            <!-- 第二行：双历法日期 -->
+            <view class="archive-dates">
+              <text class="date-solar">阳历：{{ formatArchiveDate(archive).solar }}</text>
+              <text class="date-lunar">农历：{{ formatArchiveDate(archive).lunar }}</text>
             </view>
-            <view v-if="archive.relation" class="archive-tag">
-              <text class="tag-text">{{ archive.relation }}</text>
-            </view>
-            <view v-if="archive.isDefault" class="default-badge">
-              <text class="badge-text">默认</text>
+
+            <!-- 第三行：全量标签 -->
+            <view v-if="archive.tags && archive.tags.length > 0" class="archive-tags">
+              <text
+                v-for="tag in archive.tags"
+                :key="tag"
+                class="tag-chip"
+              >{{ tag }}</text>
             </view>
           </view>
         </view>
@@ -66,17 +77,6 @@
       <!-- 快速排盘板块 -->
       <view v-if="currentTab === 1" class="quick-section">
         <view class="form-container">
-          <!-- 姓名 -->
-          <view class="form-item">
-            <text class="form-label">姓名</text>
-            <input 
-              class="form-input" 
-              v-model="quickForm.name"
-              placeholder="请输入姓名"
-              placeholder-class="placeholder-style"
-            />
-          </view>
-
           <!-- 性别 -->
           <view class="form-item">
             <text class="form-label">性别</text>
@@ -86,29 +86,48 @@
                 :class="{ active: quickForm.gender === 1 }"
                 @click="quickForm.gender = 1"
               >
-                <text class="radio-text">男 (乾造)</text>
+                <text class="radio-text">男</text>
               </view>
               <view 
                 class="radio-item" 
                 :class="{ active: quickForm.gender === 0 }"
                 @click="quickForm.gender = 0"
               >
-                <text class="radio-text">女 (坤造)</text>
+                <text class="radio-text">女</text>
               </view>
             </view>
           </view>
 
           <!-- 出生日期 -->
           <view class="form-item">
-            <text class="form-label">出生日期</text>
+            <view class="date-label-row">
+              <text class="form-label" style="margin-bottom: 0;">出生日期</text>
+              <!-- 公历/农历切换胶囊 -->
+              <view class="calendar-toggle">
+                <view
+                  class="toggle-option"
+                  :class="{ 'toggle-active': !quickForm.isLunar }"
+                  @click="quickForm.isLunar = false"
+                >
+                  <text class="toggle-text">公历</text>
+                </view>
+                <view
+                  class="toggle-option"
+                  :class="{ 'toggle-active': quickForm.isLunar }"
+                  @click="quickForm.isLunar = true"
+                >
+                  <text class="toggle-text">农历</text>
+                </view>
+              </view>
+            </view>
             <picker 
               mode="date" 
               :value="quickForm.birthDate"
               @change="onDateChange"
             >
               <view class="picker-display">
-                <text class="picker-text" :class="{ placeholder: !quickForm.birthDate }">
-                  {{ quickForm.birthDate || '请选择日期' }}
+                <text class="picker-text">
+                  {{ quickForm.birthDate }}
                 </text>
                 <text class="material-symbols-outlined picker-icon">calendar_today</text>
               </view>
@@ -151,6 +170,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
+import { Solar, Lunar } from 'lunar-javascript'
 import ZenHeader from '@/components/ZenHeader/ZenHeader.vue'
 import { useArchiveStore } from '@/store/useArchiveStore'
 import { useBaziStore } from '@/store/useBaziStore'
@@ -178,12 +198,13 @@ const baziStore = useBaziStore()
 // Tab 状态
 const currentTab = ref(0) // 0=选择档案, 1=快速排盘
 
-// 快速排盘表单
+// 快速排盘表单（name 不在 UI 显示，内部静默传递）
 const quickForm = reactive({
-  name: '',
+  name: '未知',
   gender: 1 as 0 | 1,
-  birthDate: '',
-  birthTime: ''
+  birthDate: '2000-01-01',
+  birthTime: '12:00',
+  isLunar: false
 })
 
 // 跳转到新建档案页
@@ -191,6 +212,46 @@ const goToCreateArchive = () => {
   uni.navigateTo({
     url: '/pages/archive/add'
   })
+}
+
+// 地支时辰对照（用于农历时辰显示）
+const DIZHI_HOURS = [
+  '子','丑','丑','寅','寅','卯','卯','辰','辰','巳','巳','午',
+  '午','未','未','申','申','酉','酉','戌','戌','亥','亥','子'
+]
+
+/**
+ * 根据档案数据生成阳历/农历双行显示
+ */
+const formatArchiveDate = (archive: Archive) => {
+  const { birthDate, birthTime, isLunar } = archive
+  if (!birthDate || !birthTime) return { solar: '—', lunar: '—' }
+
+  try {
+    const [year, month, day] = birthDate.split('-').map(Number)
+    const [hour] = birthTime.split(':').map(Number)
+
+    if (isLunar) {
+      // 档案本身是农历，birthDate 是农历日期，需转公历
+      const lunarObj = Lunar.fromYmd(year, month, day)
+      const solarObj = lunarObj.getSolar()
+      const sy = solarObj.getYear()
+      const sm = solarObj.getMonth()
+      const sd = solarObj.getDay()
+      const solar = `${sy}年${String(sm).padStart(2,'0')}月${String(sd).padStart(2,'0')}日 ${birthTime}`
+      const lunar = `${year}年${lunarObj.getMonthInChinese()}月${lunarObj.getDayInChinese()} ${DIZHI_HOURS[hour]}时`
+      return { solar, lunar }
+    } else {
+      // 档案是公历，转农历
+      const solarObj = Solar.fromYmd(year, month, day)
+      const lunarObj = solarObj.getLunar()
+      const solar = `${year}年${String(month).padStart(2,'0')}月${String(day).padStart(2,'0')}日 ${birthTime}`
+      const lunar = `${lunarObj.getYear()}年${lunarObj.getMonthInChinese()}月${lunarObj.getDayInChinese()} ${DIZHI_HOURS[hour]}时`
+      return { solar, lunar }
+    }
+  } catch {
+    return { solar: `${birthDate} ${birthTime}`, lunar: '—' }
+  }
 }
 
 // 选择档案并排盘
@@ -204,7 +265,7 @@ const selectArchive = async (archive: Archive) => {
       mask: true
     })
 
-    // 调用排盘接口
+    // 调用排盘接口（后端会从档案查出姓名并写入响应的 name 字段）
     await baziStore.calculateByArchive(archive.id)
 
     // 隐藏加载提示
@@ -237,15 +298,6 @@ const onTimeChange = (e: any) => {
 // 快速排盘
 const quickCalculate = async () => {
   // 表单验证
-  if (!quickForm.name.trim()) {
-    uni.showToast({
-      title: '请输入姓名',
-      icon: 'none',
-      duration: 1500
-    })
-    return
-  }
-
   if (!quickForm.birthDate) {
     uni.showToast({
       title: '请选择出生日期',
@@ -286,6 +338,7 @@ const quickCalculate = async () => {
       birth_day: day,
       birth_hour: hour,
       birth_minute: minute,
+      is_lunar: quickForm.isLunar,
       is_deep_analysis: false
     })
 
@@ -309,7 +362,7 @@ const quickCalculate = async () => {
 @import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,200,0,0&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;700&family=Inter:wght@300;400;500&display=swap');
 
-/* 全局变量 */
+/* CSS 变量定义在根容器 */
 .page-container {
   --zen-bg: #FCFAF8;
   --zen-ink: #1A1A1A;
@@ -317,7 +370,7 @@ const quickCalculate = async () => {
   --zen-border: #F0F0F0;
   --zen-accent: #A68B67;
   --zen-cinnabar: #B22222;
-  
+
   min-height: 100vh;
   background-color: var(--zen-bg);
   font-family: 'Inter', system-ui, sans-serif;
@@ -404,18 +457,27 @@ const quickCalculate = async () => {
 
 .archive-item {
   position: relative;
-  padding: 40rpx;
+  padding: 32rpx 40rpx;
   background-color: #fff;
   border: 1px solid var(--zen-border);
   border-radius: 16rpx;
   transition: all 0.3s;
 }
 
+/* 第一行：姓名 + 性别 + 默认标签 */
 .archive-header {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
-  margin-bottom: 24rpx;
+  margin-bottom: 20rpx;
+}
+
+.archive-name-row {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  flex: 1;
+  min-width: 0;
 }
 
 .archive-name {
@@ -423,59 +485,64 @@ const quickCalculate = async () => {
   font-size: 32rpx;
   font-weight: 500;
   letter-spacing: 0.05em;
+  flex-shrink: 0;
 }
 
-.archive-gender {
-  font-size: 24rpx;
-  color: var(--zen-gray);
-  letter-spacing: 0.1em;
-}
-
-.archive-info {
-  display: flex;
-  align-items: center;
-  gap: 20rpx;
-  margin-bottom: 20rpx;
-}
-
-.info-label {
-  font-size: 22rpx;
-  color: var(--zen-gray);
-  letter-spacing: 0.05em;
-}
-
-.info-value {
-  font-size: 24rpx;
-  color: var(--zen-ink);
-  font-weight: 300;
-}
-
-.archive-tag {
-  display: inline-block;
-  padding: 8rpx 20rpx;
-  background-color: rgba(166, 139, 103, 0.1);
-  border-radius: 8rpx;
-}
-
-.tag-text {
+.archive-gender-chip {
   font-size: 20rpx;
-  color: var(--zen-accent);
-  letter-spacing: 0.05em;
+  color: var(--zen-cinnabar);
+  background: rgba(178, 34, 34, 0.06);
+  padding: 4rpx 14rpx;
+  border-radius: 8rpx;
+  flex-shrink: 0;
 }
 
 .default-badge {
-  position: absolute;
-  top: 20rpx;
-  right: 20rpx;
   padding: 6rpx 16rpx;
   background-color: var(--zen-cinnabar);
   border-radius: 6rpx;
+  flex-shrink: 0;
+  margin-left: 16rpx;
 }
 
 .badge-text {
   font-size: 18rpx;
   color: #fff;
   letter-spacing: 0.1em;
+}
+
+/* 第二行：双历法日期 */
+.archive-dates {
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+  margin-bottom: 16rpx;
+}
+
+.date-solar {
+  font-size: 24rpx;
+  color: var(--zen-ink);
+  font-weight: 300;
+}
+
+.date-lunar {
+  font-size: 22rpx;
+  color: var(--zen-gray);
+}
+
+/* 第三行：全量标签 */
+.archive-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10rpx;
+}
+
+.tag-chip {
+  font-size: 20rpx;
+  color: var(--zen-accent);
+  background-color: rgba(166, 139, 103, 0.1);
+  padding: 6rpx 18rpx;
+  border-radius: 8rpx;
 }
 
 /* 空状态 */
@@ -527,6 +594,7 @@ const quickCalculate = async () => {
   margin-bottom: 0;
 }
 
+
 .form-label {
   display: block;
   font-size: 24rpx;
@@ -571,8 +639,8 @@ const quickCalculate = async () => {
 }
 
 .radio-item.active {
-  background-color: var(--zen-ink);
-  border-color: var(--zen-ink);
+  background-color: #B23A34;
+  border-color: #B23A34;
 }
 
 .radio-text {
@@ -583,6 +651,43 @@ const quickCalculate = async () => {
 
 .radio-item.active .radio-text {
   color: #fff;
+}
+
+/* 出生日期标签行（含历法切换） */
+.date-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20rpx;
+}
+
+/* 公历/农历胶囊切换 */
+.calendar-toggle {
+  display: flex;
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 32rpx;
+  padding: 4rpx;
+}
+
+.toggle-option {
+  padding: 8rpx 24rpx;
+  border-radius: 28rpx;
+  transition: all 0.2s ease;
+}
+
+.toggle-active {
+  background: #B23A34;
+}
+
+.toggle-text {
+  font-size: 22rpx;
+  color: rgba(142, 142, 147, 0.8);
+  letter-spacing: 1rpx;
+}
+
+.toggle-active .toggle-text {
+  color: #FFFFFF;
+  font-weight: 500;
 }
 
 /* 选择器显示 */
@@ -624,7 +729,7 @@ const quickCalculate = async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: var(--zen-ink);
+  background-color: #B23A34;
   border: none;
   border-radius: 12rpx;
   transition: all 0.3s;

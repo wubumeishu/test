@@ -160,6 +160,116 @@ NAYIN_MAP = {
 }
 
 
+# ==================== 命理神煞规则表 ====================
+
+# 1. 以日干查地支 (天乙贵人)
+TIANYI_GUIREN = {
+    "甲": ["丑", "未"], "戊": ["丑", "未"], "庚": ["丑", "未"],
+    "乙": ["子", "申"], "己": ["子", "申"],
+    "丙": ["亥", "酉"], "丁": ["亥", "酉"],
+    "壬": ["卯", "巳"], "癸": ["卯", "巳"],
+    "辛": ["寅", "午"]
+}
+
+# 2. 以日干查地支 (文昌贵人)
+WENCHANG_GUIREN = {
+    "甲": "巳", "乙": "午", "丙": "申", "丁": "酉", "戊": "申",
+    "己": "酉", "庚": "亥", "辛": "子", "壬": "寅", "癸": "卯"
+}
+
+# 3. 以日干查地支 (羊刃)
+YANG_REN = {
+    "甲": "卯", "丙": "午", "戊": "午", "庚": "酉", "壬": "子"
+}
+
+# 4. 以日干查地支 (禄神)
+LU_SHEN = {
+    "甲": "寅", "乙": "卯", "丙": "巳", "丁": "午", "戊": "巳",
+    "己": "午", "庚": "申", "辛": "酉", "壬": "亥", "癸": "子"
+}
+
+# 5. 以年支或日支查地支 (驿马、桃花、华盖、将星)
+SANHE_SHENSHA = {
+    "申": {"驿马": "寅", "桃花": "酉", "华盖": "辰", "将星": "子"},
+    "子": {"驿马": "寅", "桃花": "酉", "华盖": "辰", "将星": "子"},
+    "辰": {"驿马": "寅", "桃花": "酉", "华盖": "辰", "将星": "子"},
+    "亥": {"驿马": "巳", "桃花": "子", "华盖": "未", "将星": "卯"},
+    "卯": {"驿马": "巳", "桃花": "子", "华盖": "未", "将星": "卯"},
+    "未": {"驿马": "巳", "桃花": "子", "华盖": "未", "将星": "卯"},
+    "寅": {"驿马": "申", "桃花": "卯", "华盖": "戌", "将星": "午"},
+    "午": {"驿马": "申", "桃花": "卯", "华盖": "戌", "将星": "午"},
+    "戌": {"驿马": "申", "桃花": "卯", "华盖": "戌", "将星": "午"},
+    "巳": {"驿马": "亥", "桃花": "午", "华盖": "丑", "将星": "酉"},
+    "酉": {"驿马": "亥", "桃花": "午", "华盖": "丑", "将星": "酉"},
+    "丑": {"驿马": "亥", "桃花": "午", "华盖": "丑", "将星": "酉"}
+}
+
+
+# 6. 以日干查地支 (太极贵人、国印贵人、天厨贵人)
+TAIJI_GUIREN = {
+    "甲": ["子", "午"], "乙": ["子", "午"],
+    "丙": ["卯", "酉"], "丁": ["卯", "酉"],
+    "戊": ["辰", "戌", "丑", "未"], "己": ["辰", "戌", "丑", "未"],
+    "庚": ["寅", "亥"], "辛": ["寅", "亥"],
+    "壬": ["巳", "申"], "癸": ["巳", "申"]
+}
+
+GUOYIN_GUIREN = {
+    "甲": "戌", "乙": "亥", "丙": "丑", "丁": "寅", "戊": "丑",
+    "己": "寅", "庚": "辰", "辛": "巳", "壬": "未", "癸": "申"
+}
+
+TIANCHU_GUIREN = {
+    "甲": "巳", "乙": "午", "丙": "子", "丁": "巳", "戊": "午",
+    "己": "申", "庚": "亥", "辛": "午", "壬": "酉", "癸": "亥"
+}
+
+# 7. 以月支查天干或地支 (天德贵人、月德贵人)
+TIANDE_GUIREN = {
+    "寅": ["丁"], "卯": ["申"], "辰": ["壬"], "巳": ["辛"],
+    "午": ["亥"], "未": ["甲"], "申": ["癸"], "酉": ["寅"],
+    "戌": ["丙"], "亥": ["乙"], "子": ["巳"], "丑": ["庚"]
+}
+
+YUEDE_GUIREN = {
+    "寅": "丙", "午": "丙", "戌": "丙",
+    "申": "壬", "子": "壬", "辰": "壬",
+    "亥": "甲", "卯": "甲", "未": "甲",
+    "巳": "庚", "酉": "庚", "丑": "庚"
+}
+
+# 8. 以年支/日支查地支 (孤辰寡宿、劫煞亡神)
+GUCHEN_GUASU = {
+    "亥": {"孤辰": "寅", "寡宿": "戌"},
+    "子": {"孤辰": "寅", "寡宿": "戌"},
+    "丑": {"孤辰": "寅", "寡宿": "戌"},
+    "寅": {"孤辰": "巳", "寡宿": "丑"},
+    "卯": {"孤辰": "巳", "寡宿": "丑"},
+    "辰": {"孤辰": "巳", "寡宿": "丑"},
+    "巳": {"孤辰": "申", "寡宿": "辰"},
+    "午": {"孤辰": "申", "寡宿": "辰"},
+    "未": {"孤辰": "申", "寡宿": "辰"},
+    "申": {"孤辰": "亥", "寡宿": "未"},
+    "酉": {"孤辰": "亥", "寡宿": "未"},
+    "戌": {"孤辰": "亥", "寡宿": "未"}
+}
+
+JIESHA_WANGSHEN = {
+    "申": {"劫煞": "巳", "亡神": "亥"},
+    "子": {"劫煞": "巳", "亡神": "亥"},
+    "辰": {"劫煞": "巳", "亡神": "亥"},
+    "亥": {"劫煞": "申", "亡神": "寅"},
+    "卯": {"劫煞": "申", "亡神": "寅"},
+    "未": {"劫煞": "申", "亡神": "寅"},
+    "寅": {"劫煞": "亥", "亡神": "巳"},
+    "午": {"劫煞": "亥", "亡神": "巳"},
+    "戌": {"劫煞": "亥", "亡神": "巳"},
+    "巳": {"劫煞": "寅", "亡神": "申"},
+    "酉": {"劫煞": "寅", "亡神": "申"},
+    "丑": {"劫煞": "寅", "亡神": "申"}
+}
+
+
 # ==================== 数据类定义 ====================
 
 @dataclass
@@ -289,45 +399,90 @@ def get_changsheng(day_gan: str, zhi: str) -> str:
     return CHANGSHENG_MAP.get(day_gan, {}).get(zhi, "")
 
 
-def extract_shensha(lunar_obj, pillar_type: str) -> List[str]:
+def calculate_bazi_shensha(
+    day_gan: str,
+    year_zhi: str,
+    month_zhi: str,
+    day_zhi: str,
+    target_gan: str,
+    target_zhi: str
+) -> List[str]:
     """
-    提取神煞列表
-    
+    计算特定柱的命理神煞
+
     Args:
-        lunar_obj: Lunar 对象
-        pillar_type: 柱类型 ('year', 'month', 'day', 'time')
-        
+        day_gan:    日主天干
+        year_zhi:   年柱地支（三合神煞基准）
+        month_zhi:  月柱地支（天德/月德基准）
+        day_zhi:    日柱地支（三合神煞基准）
+        target_gan: 待检测柱的天干
+        target_zhi: 待检测柱的地支
+
     Returns:
-        神煞名称列表
+        该柱上的神煞名称列表
     """
     shensha_list = []
-    
-    try:
-        if pillar_type == 'day':
-            # 日柱神煞：吉神 + 凶煞 + 天神
-            ji_shen = lunar_obj.getDayJiShen()  # 吉神列表
-            xiong_sha = lunar_obj.getDayXiongSha()  # 凶煞列表
-            tian_shen = lunar_obj.getDayTianShen()  # 天神
-            
-            if ji_shen:
-                shensha_list.extend(ji_shen)
-            if xiong_sha:
-                shensha_list.extend(xiong_sha)
-            if tian_shen and tian_shen not in shensha_list:
-                shensha_list.append(tian_shen)
-                
-        elif pillar_type == 'time':
-            # 时柱神煞：天神
-            tian_shen = lunar_obj.getTimeTianShen()
-            if tian_shen:
-                shensha_list.append(tian_shen)
-        
-        # 年柱和月柱：lunar-python 未提供专门的神煞方法，返回空列表
-        # 注：可以根据需要扩展自定义神煞计算逻辑
-        
-    except Exception as e:
-        print(f"⚠️ [神煞提取] {pillar_type}柱神煞提取失败: {e}")
-    
+    target_ganzhi = f"{target_gan}{target_zhi}"
+
+    # ── 1. 柱级特定神煞（干支组合判断）────────────────────
+    if target_ganzhi in ["庚辰", "庚戌", "壬辰", "戊戌"]:
+        shensha_list.append("魁罡")
+
+    if target_ganzhi in [
+        "丙子", "丁丑", "戊寅", "辛卯", "壬辰", "癸巳",
+        "丙午", "丁未", "戊申", "辛酉", "壬戌", "癸亥"
+    ]:
+        shensha_list.append("阴阳差错")
+
+    # ── 2. 以日干推算地支神煞 ──────────────────────────────
+    if target_zhi in TIANYI_GUIREN.get(day_gan, []):
+        shensha_list.append("天乙贵人")
+
+    if target_zhi == WENCHANG_GUIREN.get(day_gan):
+        shensha_list.append("文昌贵人")
+
+    if target_zhi == YANG_REN.get(day_gan):
+        shensha_list.append("羊刃")
+
+    if target_zhi == LU_SHEN.get(day_gan):
+        shensha_list.append("禄神")
+
+    if target_zhi in TAIJI_GUIREN.get(day_gan, []):
+        shensha_list.append("太极贵人")
+
+    if target_zhi == GUOYIN_GUIREN.get(day_gan):
+        shensha_list.append("国印贵人")
+
+    if target_zhi == TIANCHU_GUIREN.get(day_gan):
+        shensha_list.append("天厨贵人")
+
+    # ── 3. 以月支推算天干/地支神煞 ─────────────────────────
+    tiande_targets = TIANDE_GUIREN.get(month_zhi, [])
+    if target_gan in tiande_targets or target_zhi in tiande_targets:
+        if "天德贵人" not in shensha_list:
+            shensha_list.append("天德贵人")
+
+    if target_gan == YUEDE_GUIREN.get(month_zhi):
+        if "月德贵人" not in shensha_list:
+            shensha_list.append("月德贵人")
+
+    # ── 4. 以年支/日支推算地支神煞（去重）──────────────────
+    for base_zhi in [year_zhi, day_zhi]:
+        # 三合神煞（驿马、桃花、华盖、将星）
+        for ss_name, zhi in SANHE_SHENSHA.get(base_zhi, {}).items():
+            if target_zhi == zhi and ss_name not in shensha_list:
+                shensha_list.append(ss_name)
+
+        # 孤辰寡宿
+        for ss_name, zhi in GUCHEN_GUASU.get(base_zhi, {}).items():
+            if target_zhi == zhi and ss_name not in shensha_list:
+                shensha_list.append(ss_name)
+
+        # 劫煞亡神
+        for ss_name, zhi in JIESHA_WANGSHEN.get(base_zhi, {}).items():
+            if target_zhi == zhi and ss_name not in shensha_list:
+                shensha_list.append(ss_name)
+
     return shensha_list
 
 
@@ -480,61 +635,59 @@ def calculate_full_bazi(
         
         # 获取八字
         bazi = lunar.getEightChar()
-        
-        # 年柱（使用 lunar-python 原生方法）
-        year_gan = bazi.getYearGan()
-        year_zhi = bazi.getYearZhi()
-        year_pillar = Pillar(
-            gan=year_gan,
-            zhi=year_zhi,
-            nayin=get_nayin(year_gan, year_zhi),
-            canggan=bazi.getYearHideGan(),  # 使用原生方法获取藏干
-            shishen=bazi.getYearShiShenGan(),  # 使用原生方法获取年干十神
-            changsheng=bazi.getYearDiShi(),  # 使用原生方法获取年支地势（十二长生）
-            canggan_shishen=bazi.getYearShiShenZhi(),  # 使用原生方法获取年支藏干十神
-            shensha=extract_shensha(lunar, 'year')  # 提取年柱神煞
-        )
-        
-        # 月柱（使用 lunar-python 原生方法）
+
+        # 先获取所有干支，供四柱组装和神煞推算统一使用
+        year_gan  = bazi.getYearGan()
+        year_zhi  = bazi.getYearZhi()
         month_gan = bazi.getMonthGan()
         month_zhi = bazi.getMonthZhi()
+        day_gan   = bazi.getDayGan()
+        day_zhi   = bazi.getDayZhi()
+        hour_gan  = bazi.getTimeGan()
+        hour_zhi  = bazi.getTimeZhi()
+
+        # 年柱
+        year_pillar = Pillar(
+            gan=year_gan, zhi=year_zhi,
+            nayin=get_nayin(year_gan, year_zhi),
+            canggan=bazi.getYearHideGan(),
+            shishen=bazi.getYearShiShenGan(),
+            changsheng=bazi.getYearDiShi(),
+            canggan_shishen=bazi.getYearShiShenZhi(),
+            shensha=calculate_bazi_shensha(day_gan, year_zhi, month_zhi, day_zhi, year_gan, year_zhi)
+        )
+
+        # 月柱
         month_pillar = Pillar(
-            gan=month_gan,
-            zhi=month_zhi,
+            gan=month_gan, zhi=month_zhi,
             nayin=get_nayin(month_gan, month_zhi),
-            canggan=bazi.getMonthHideGan(),  # 使用原生方法获取藏干
-            shishen=bazi.getMonthShiShenGan(),  # 使用原生方法获取月干十神
-            changsheng=bazi.getMonthDiShi(),  # 使用原生方法获取月支地势（十二长生）
-            canggan_shishen=bazi.getMonthShiShenZhi(),  # 使用原生方法获取月支藏干十神
-            shensha=extract_shensha(lunar, 'month')  # 提取月柱神煞
+            canggan=bazi.getMonthHideGan(),
+            shishen=bazi.getMonthShiShenGan(),
+            changsheng=bazi.getMonthDiShi(),
+            canggan_shishen=bazi.getMonthShiShenZhi(),
+            shensha=calculate_bazi_shensha(day_gan, year_zhi, month_zhi, day_zhi, month_gan, month_zhi)
         )
-        
-        # 日柱（使用 lunar-python 原生方法）
-        day_gan = bazi.getDayGan()
-        day_zhi = bazi.getDayZhi()
+
+        # 日柱
         day_pillar = Pillar(
-            gan=day_gan,
-            zhi=day_zhi,
+            gan=day_gan, zhi=day_zhi,
             nayin=get_nayin(day_gan, day_zhi),
-            canggan=bazi.getDayHideGan(),  # 使用原生方法获取藏干
-            shishen="日主",  # 日干固定为日主
-            changsheng=bazi.getDayDiShi(),  # 使用原生方法获取日支地势（十二长生）
-            canggan_shishen=bazi.getDayShiShenZhi(),  # 使用原生方法获取日支藏干十神
-            shensha=extract_shensha(lunar, 'day')  # 提取日柱神煞
+            canggan=bazi.getDayHideGan(),
+            shishen="日主",
+            changsheng=bazi.getDayDiShi(),
+            canggan_shishen=bazi.getDayShiShenZhi(),
+            shensha=calculate_bazi_shensha(day_gan, year_zhi, month_zhi, day_zhi, day_gan, day_zhi)
         )
-        
-        # 时柱（使用 lunar-python 原生方法）
-        hour_gan = bazi.getTimeGan()
-        hour_zhi = bazi.getTimeZhi()
+
+        # 时柱
         hour_pillar = Pillar(
-            gan=hour_gan,
-            zhi=hour_zhi,
+            gan=hour_gan, zhi=hour_zhi,
             nayin=get_nayin(hour_gan, hour_zhi),
-            canggan=bazi.getTimeHideGan(),  # 使用原生方法获取藏干
-            shishen=bazi.getTimeShiShenGan(),  # 使用原生方法获取时干十神
-            changsheng=bazi.getTimeDiShi(),  # 使用原生方法获取时支地势（十二长生）
-            canggan_shishen=bazi.getTimeShiShenZhi(),  # 使用原生方法获取时支藏干十神
-            shensha=extract_shensha(lunar, 'time')  # 提取时柱神煞
+            canggan=bazi.getTimeHideGan(),
+            shishen=bazi.getTimeShiShenGan(),
+            changsheng=bazi.getTimeDiShi(),
+            canggan_shishen=bazi.getTimeShiShenZhi(),
+            shensha=calculate_bazi_shensha(day_gan, year_zhi, month_zhi, day_zhi, hour_gan, hour_zhi)
         )
         
         # 八字字符串

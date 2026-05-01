@@ -11,6 +11,7 @@ class ArchiveBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=50, description="姓名")
     gender: int = Field(..., ge=0, le=1, description="性别 (1=男, 0=女)")
     calendar_type: str = Field(default="solar", description="历法类型 (solar/lunar)")
+    is_lunar: bool = Field(default=False, description="是否为农历")
     birth_year: int = Field(..., ge=1900, le=2100, description="出生年份")
     birth_month: int = Field(..., ge=1, le=12, description="出生月份")
     birth_day: int = Field(..., ge=1, le=31, description="出生日期")

@@ -57,6 +57,46 @@
 			}
 		},
 		{
+			"path": "pages/questions/mbti",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "MBTI 测试",
+				"enablePullDownRefresh": false
+			}
+		},
+		{
+			"path": "pages/questions/mbti-result",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "MBTI 结果",
+				"enablePullDownRefresh": false
+			}
+		},
+		{
+			"path": "pages/questions/mbti-advanced",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "64 型附加测试",
+				"enablePullDownRefresh": false
+			}
+		},
+		{
+			"path": "pages/questions/mbti-advanced-result",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "64 型解析报告",
+				"enablePullDownRefresh": false
+			}
+		},
+		{
+			"path": "pages/mine/history",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "测算历史",
+				"enablePullDownRefresh": false
+			}
+		},
+		{
 			"path": "pages/test/test",
 			"style": {
 				"navigationBarTitleText": "后端排盘测试",
