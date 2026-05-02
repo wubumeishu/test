@@ -38,3 +38,8 @@ unpackage/
 # 临时文件
 *.tmp
 *.temp
+
+# Python 编译缓存
+__pycache__/
+*.pyc
+*.pyo
