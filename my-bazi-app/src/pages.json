@@ -89,6 +89,22 @@
 			}
 		},
 		{
+			"path": "pages/questions/tarot",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "塔罗占卜",
+				"enablePullDownRefresh": false
+			}
+		},
+		{
+			"path": "pages/questions/tarot-result",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "塔罗解读",
+				"enablePullDownRefresh": false
+			}
+		},
+		{
 			"path": "pages/mine/history",
 			"style": {
 				"navigationStyle": "custom",

@@ -51,6 +51,14 @@
                 <text class="summary-name summary-name--mbti">{{ item.mbtiType }}</text>
                 <text class="summary-sub">{{ item.mbtiTitle }}</text>
               </template>
+              <!-- 塔罗：问题摘要 + 三张牌名 -->
+              <template v-else-if="item.type === 'tarot'">
+                <text class="summary-name summary-name--tarot">🌙 {{ item.tarotTitle }}</text>
+                <text class="summary-sub summary-sub--question">心中的困惑：{{ item.tarotQuestion }}</text>
+                <text class="summary-sub" v-if="item.tarotCards?.length === 3">
+                  {{ ['过去', '现在', '未来'].map((pos, i) => `${pos}·${majorArcana[item.tarotCards![i]]?.name ?? '?'}`).join('　') }}
+                </text>
+              </template>
               <!-- 兜底 -->
               <template v-else>
                 <text class="summary-name">{{ item.name }}</text>
@@ -76,6 +84,7 @@ import { get } from '@/utils/request'
 import { useBaziStore } from '@/store/useBaziStore'
 import type { BaziCalculateResponse } from '@/store/useBaziStore'
 import { mbtiDict } from '@/data/mbtiDict'
+import { majorArcana } from '@/data/tarot'
 
 const baziStore = useBaziStore()
 
@@ -95,10 +104,24 @@ interface HistoryItem {
   mbtiType?: string
   mbtiTitle?: string
   rawMbti?: any
+  // 塔罗专属
+  tarotQuestion?: string   // 用户提问
+  tarotTitle?: string      // 阵型名称，如「塔罗·命运圣三角」
+  tarotCards?: number[]    // [过去, 现在, 未来] majorArcana 索引
 }
 
-const isLoading   = ref(true)
-const mergedList  = ref<HistoryItem[]>([])
+// ── 工具：兼容有无 uni- 前缀的 storage 读取 ──
+// H5 下 uni.setStorageSync 会加 uni- 前缀，但旧数据可能是直接用 localStorage 写的（无前缀）
+const getStorage = (key: string): any => {
+  const v = uni.getStorageSync(key)  // 读 uni-{key}
+  if (v !== '' && v !== null && v !== undefined) return v
+  // 兜底：尝试直接读无前缀的 key
+  try {
+    const raw = localStorage.getItem(key)
+    if (raw === null || raw === '') return null
+    try { return JSON.parse(raw) } catch { return raw }
+  } catch { return null }
+}
 
 // ── 工具函数 ──
 const typeLabel = (type: RecordType) => {
@@ -129,12 +152,7 @@ const loadHistory = async () => {
     const res = await get<{ total: number; records: any[] }>('/api/fortune/records?limit=50&offset=0')
     for (const r of res.records ?? []) {
       const { str, stamp } = formatTime(r.created_at ?? Date.now())
-      // 姓名兜底链：顶层 name → five_elements_json.name → bazi_json.name → '未知'
-      const resolvedName =
-        r.name
-        ?? r.five_elements_json?.name
-        ?? r.bazi_json?.name
-        ?? '未知'
+      const resolvedName = r.name ?? r.five_elements_json?.name ?? r.bazi_json?.name ?? '未知'
       items.push({
         id:      r.record_id,
         type:    'bazi',
@@ -142,34 +160,60 @@ const loadHistory = async () => {
         rawTime: stamp,
         name:    resolvedName,
         baziStr: r.bazi_str ?? '',
-        rawBazi: { ...r, name: resolvedName },   // 确保 rawBazi.name 有值，结果页可直接读取
+        rawBazi: { ...r, name: resolvedName },
       })
     }
   } catch (e) {
     console.warn('⚠️ [history] 获取八字记录失败:', e)
   }
 
-  // 2. 从本地缓存读取 MBTI 记录（单条，后续可扩展为列表）
+  // 2. 从本地缓存读取 MBTI 记录（兼容有无 uni- 前缀）
   try {
-    const mbtiRaw = uni.getStorageSync('mbti_result')
-    if (mbtiRaw?.type) {
+    const mbtiRaw = getStorage('mbti_result')
+    console.log('📦 [history] mbti_result:', JSON.stringify(mbtiRaw))
+    if (mbtiRaw && typeof mbtiRaw === 'object' && mbtiRaw.type) {
       const info = mbtiDict[mbtiRaw.type]
       const { str, stamp } = formatTime(mbtiRaw.timestamp ?? Date.now())
       items.push({
-        id:         `mbti-${stamp}`,
-        type:       'mbti',
-        timeStr:    str,
-        rawTime:    stamp,
-        mbtiType:   mbtiRaw.type,
-        mbtiTitle:  info?.title ?? '',
-        rawMbti:    mbtiRaw,
+        id:        `mbti-${stamp}`,
+        type:      'mbti',
+        timeStr:   str,
+        rawTime:   stamp,
+        mbtiType:  mbtiRaw.type,
+        mbtiTitle: info?.title ?? '',
+        rawMbti:   mbtiRaw,
       })
     }
   } catch (e) {
     console.warn('⚠️ [history] 读取 MBTI 缓存失败:', e)
   }
 
-  // 3. 按时间倒序合并
+  // 3. 从本地缓存读取塔罗历史记录（兼容有无 uni- 前缀）
+  try {
+    const tarotRaw = getStorage('tarot_history')
+    const tarotHistory: Array<{
+      id: string; title?: string; question: string; cards: number[]; createdAt: number
+    }> = Array.isArray(tarotRaw) ? tarotRaw : []
+    console.log('📦 [history] tarot_history 条数:', tarotHistory.length)
+
+    for (const r of tarotHistory) {
+      if (!r.question || !Array.isArray(r.cards) || r.cards.length < 3) continue
+      const { str, stamp } = formatTime(r.createdAt ?? Date.now())
+      items.push({
+        id:            r.id,
+        type:          'tarot',
+        timeStr:       str,
+        rawTime:       stamp,
+        tarotTitle:    r.title || '塔罗·命运圣三角',
+        tarotQuestion: r.question,
+        tarotCards:    r.cards,
+      })
+    }
+  } catch (e) {
+    console.warn('⚠️ [history] 读取塔罗缓存失败:', e)
+  }
+
+  // 4. 按时间倒序合并
   mergedList.value = items.sort((a, b) => b.rawTime - a.rawTime)
   isLoading.value  = false
 }
@@ -178,19 +222,19 @@ const loadHistory = async () => {
 const goToDetail = (item: HistoryItem) => {
   if (item.type === 'bazi') {
     if (item.rawBazi) {
-      // 用 restoreHistoryData 完整恢复排盘数据（含四柱、五行、baseInfo）
       baziStore.restoreHistoryData(item.rawBazi, item.name)
     }
     uni.navigateTo({ url: '/pages/result/result' })
 
   } else if (item.type === 'mbti') {
-    // 将 MBTI 结果写入缓存，跳转结果页
     uni.setStorageSync('mbti_result', item.rawMbti)
     uni.navigateTo({ url: '/pages/questions/mbti-result' })
 
-  } else {
-    // 预留：塔罗等其他类型
-    uni.showToast({ title: `${typeLabel(item.type)} 详情即将上线`, icon: 'none' })
+  } else if (item.type === 'tarot') {
+    // 携带 isHistory=true 和 historyId，结果页会从 tarot_history 中查找对应记录
+    uni.navigateTo({
+      url: `/pages/questions/tarot-result?isHistory=true&historyId=${item.id}`
+    })
   }
 }
 
@@ -373,6 +417,30 @@ onShow(() => { loadHistory() })
   font-size: 34rpx;
   font-weight: 700;
   letter-spacing: 0.15em;
+}
+
+/* 塔罗问题：截断省略 */
+.summary-name--tarot {
+  font-size: 26rpx;
+  font-weight: 400;
+  color: #7B68EE;
+  letter-spacing: 0.04em;
+  /* 超长问题截断 */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: block;
+}
+
+/* 塔罗「心中的困惑：」行 */
+.summary-sub--question {
+  font-size: 24rpx;
+  color: rgba(123, 104, 238, 0.7);
+  letter-spacing: 0.04em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: block;
 }
 
 .summary-sub {

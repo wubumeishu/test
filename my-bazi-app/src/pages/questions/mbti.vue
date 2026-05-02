@@ -354,9 +354,10 @@ const calculateResult = () => {
 
   // 将结果暂存到本地，供结果页读取
   uni.setStorageSync('mbti_result', {
-    type:    result.type,
-    details: result.details,
-    version: currentTestVersion.value,
+    type:      result.type,
+    details:   result.details,
+    version:   currentTestVersion.value,
+    timestamp: Date.now(),
   })
 
   // 跳转到独立结果页

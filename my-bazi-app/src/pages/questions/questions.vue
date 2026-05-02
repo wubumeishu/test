@@ -130,6 +130,11 @@ const goToMBTI = () => {
   uni.navigateTo({ url: '/pages/questions/mbti' })
 }
 
+// 跳转到塔罗占卜页
+const goToTarot = () => {
+  uni.navigateTo({ url: '/pages/questions/tarot' })
+}
+
 // 网格项点击事件
 const handleGridItemClick = (item: any) => {
   console.log('🔘 [questions] 点击网格项:', item)
@@ -138,6 +143,8 @@ const handleGridItemClick = (item: any) => {
     uni.navigateTo({ url: '/pages/bazi/setup' })
   } else if (item.action === 'MBTI') {
     goToMBTI()
+  } else if (item.action === 'REVEAL') {
+    goToTarot()
   } else {
     uni.showToast({ title: `${item.title} 功能开发中`, icon: 'none', duration: 1500 })
   }

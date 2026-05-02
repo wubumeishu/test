@@ -202,8 +202,8 @@
 
       </view>
 
-      <!-- ── 隐藏测试钩子 ── -->
-      <view class="hook-card" hover-class="hook-card-hover" @click="goToAdvancedTest">
+      <!-- ── 隐藏测试钩子（仅 93 题完整版显示）── -->
+      <view v-if="version === 'full'" class="hook-card" hover-class="hook-card-hover" @click="goToAdvancedTest">
         <view class="hook-glow"></view>
         <view class="hook-content">
           <view class="hook-header">
