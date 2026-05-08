@@ -1,0 +1,59 @@
+# =============================================================================
+# Systemd 服务配置 — 云水禅心后端服务 (zenfortune)
+#
+# 安装步骤：
+#   sudo cp /var/www/zenfortune/backend/deploy/zenfortune.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable zenfortune
+#   sudo systemctl start zenfortune
+#
+# 常用命令：
+#   sudo systemctl status zenfortune    # 查看状态
+#   sudo systemctl restart zenfortune   # 重启服务
+#   sudo journalctl -u zenfortune -f    # 实时查看日志
+# =============================================================================
+
+[Unit]
+Description=云水禅心 FastAPI 后端服务 (Gunicorn + UvicornWorker)
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+# 运行用户和用户组（建议使用专用的非 root 用户）
+User=www-data
+Group=www-data
+
+# 工作目录
+WorkingDirectory=/var/www/zenfortune/backend
+
+# 环境变量文件（包含 DATABASE_URL、DEEPSEEK_API_KEY 等敏感配置）
+EnvironmentFile=/var/www/zenfortune/backend/.env
+
+# 启动命令：使用虚拟环境中的 gunicorn，加载配置文件
+ExecStart=/var/www/zenfortune/backend/venv/bin/gunicorn \
+    -c /var/www/zenfortune/backend/deploy/gunicorn.conf.py \
+    main:app
+
+# 重载命令（发送 HUP 信号，优雅重载，不中断现有连接）
+ExecReload=/bin/kill -s HUP $MAINPID
+
+# 停止命令（发送 TERM 信号，优雅关闭）
+ExecStop=/bin/kill -s TERM $MAINPID
+
+# 进程退出后自动重启
+Restart=on-failure
+RestartSec=5s
+
+# 标准输出和错误输出均交由 journald 管理
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=zenfortune
+
+# 文件描述符限制
+LimitNOFILE=65536
+
+# 进程数限制
+LimitNPROC=4096
+
+[Install]
+WantedBy=multi-user.target

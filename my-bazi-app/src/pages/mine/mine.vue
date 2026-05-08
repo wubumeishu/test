@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <view class="page-container">
     <ZenHeader title="个人中心" />
 
@@ -55,9 +55,10 @@
               <text class="archive-date">
                 {{ archiveStore.defaultArchive.birthDate }} {{ archiveStore.defaultArchive.birthTime }}
               </text>
-              <text v-if="archiveStore.defaultArchive.tags?.length" class="archive-tags">
-                {{ archiveStore.defaultArchive.tags.join(' · ') }}
-              </text>
+              <view v-if="archiveStore.defaultArchive.tags?.length" class="archive-tags">
+                <text class="material-symbols-outlined tag-icon">sell</text>
+                <text class="tag-text">{{ archiveStore.defaultArchive.tags.join(' · ') }}</text>
+              </view>
             </view>
             <text class="material-symbols-outlined arrow-icon">chevron_right</text>
           </view>
@@ -89,7 +90,7 @@
         </view>
         <view class="menu-item" hover-class="menu-item-hover">
           <view class="menu-left">
-            <text class="material-symbols-outlined menu-icon">bookmark_heart</text>
+            <text class="material-symbols-outlined menu-icon">favorite</text>
             <text class="menu-text">我的收藏</text>
           </view>
           <text class="material-symbols-outlined arrow-icon">chevron_right</text>
@@ -127,6 +128,14 @@
         </view>
       </ZenCard>
 
+      <!-- 退出登录按钮 -->
+      <view class="logout-section">
+        <button class="logout-btn" hover-class="logout-btn-hover" @click="handleLogout">
+          <text class="material-symbols-outlined logout-icon">logout</text>
+          <text class="logout-text">退出禅境</text>
+        </button>
+      </view>
+
       <view class="footer-quote">
         <text>"随缘自适，烦恼即菩提"</text>
       </view>
@@ -144,10 +153,12 @@ import ZenHeader from '@/components/ZenHeader/ZenHeader.vue'
 import ZenCard from '@/components/ZenCard/ZenCard.vue'
 import ZenTabBar from '@/components/ZenTabBar/ZenTabBar.vue'
 import { useArchiveStore } from '@/store/useArchiveStore'
+import { useUserStore } from '@/store/useUserStore'
 import { get } from '@/utils/request'
 
 // 初始化 Store
 const archiveStore = useArchiveStore()
+const userStore = useUserStore()
 
 // ==================== 测算记录数量 ====================
 const recordCount = ref(0)
@@ -193,7 +204,7 @@ onShow(() => {
  */
 const handleEditArchive = (id: string) => {
   uni.navigateTo({
-    url: `/pages/archive/add?id=${id}`
+    url: `/package_archive/pages/archive/add?id=${id}`
   })
 }
 
@@ -202,7 +213,7 @@ const handleEditArchive = (id: string) => {
  */
 const handleCreateArchive = () => {
   uni.navigateTo({
-    url: '/pages/archive/add'
+    url: '/package_archive/pages/archive/add'
   })
 }
 
@@ -211,7 +222,7 @@ const handleCreateArchive = () => {
  */
 const handleManageArchive = () => {
   uni.navigateTo({
-    url: '/pages/archive/list'
+    url: '/package_archive/pages/archive/list'
   })
 }
 
@@ -220,14 +231,62 @@ const handleManageArchive = () => {
  */
 const goToHistory = () => {
   uni.navigateTo({
-    url: '/pages/mine/history'
+    url: '/package_archive/pages/history/history'
+  })
+}
+
+/**
+ * 退出登录
+ */
+const handleLogout = () => {
+  uni.showModal({
+    title: '提示',
+    content: '确定要退出禅境吗？',
+    confirmText: '确定',
+    cancelText: '取消',
+    success: (res) => {
+      if (res.confirm) {
+        // 调用 Store 退出登录
+        userStore.logout()
+        
+        // 清理其他业务缓存
+        try {
+          // 清理 MBTI 测试结果
+          uni.removeStorageSync('mbti_result')
+          uni.removeStorageSync('mbti_advanced_result')
+          
+          // 清理塔罗占卜结果
+          uni.removeStorageSync('tarot_result')
+          
+          // 清理八字排盘历史（可选，根据业务需求）
+          // uni.removeStorageSync('bazi_history')
+          
+          console.log('✅ [mine] 已清理业务缓存')
+        } catch (error) {
+          console.error('❌ [mine] 清理缓存失败:', error)
+        }
+        
+        // 显示退出提示
+        uni.showToast({
+          title: '已退出',
+          icon: 'success',
+          duration: 1500
+        })
+        
+        // 延迟跳转到登录页
+        setTimeout(() => {
+          uni.reLaunch({
+            url: '/pages/login/login'
+          })
+        }, 1500)
+      }
+    }
   })
 }
 </script>
 
-<style>
-@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,200,0,0&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700&family=Noto+Sans+SC:wght@300;400;500&display=swap');
+<style lang="scss" scoped>
+/* 页面样式 - Material Symbols 图标字体已在 App.vue 全局定义 */
 
 page {
   --zen-offwhite: #F9F6F1;
@@ -238,7 +297,7 @@ page {
   --zen-stone: #A8A29E;
   
   background-color: var(--zen-offwhite);
-  background-image: url("https://www.transparenttextures.com/patterns/handmade-paper.png");
+  background-image: url("/static/handmade-paper.png");
   font-family: 'Noto Sans SC', sans-serif;
   color: var(--zen-charcoal);
 }
@@ -395,12 +454,13 @@ page {
   width: 12rpx;
   height: 12rpx;
   border-radius: 50%;
-  background: var(--zen-cinnabar);
+  background: #B23A34;
+  flex-shrink: 0;
 }
 
 .default-label {
   font-size: 20rpx;
-  color: var(--zen-cinnabar);
+  color: #B23A34 !important;
   font-weight: 500;
   letter-spacing: 0.1em;
 }
@@ -418,11 +478,16 @@ page {
   height: 96rpx;
   border-radius: 50%;
   background: rgba(178, 58, 52, 0.06);
-  color: var(--zen-cinnabar);
+  color: #B23A34;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  
+  .material-symbols-outlined {
+    font-size: 48rpx;
+    color: #B23A34;
+  }
 }
 
 .archive-info {
@@ -447,7 +512,8 @@ page {
   padding: 2rpx 14rpx;
   border-radius: 8rpx;
   background: rgba(178, 58, 52, 0.08);
-  color: var(--zen-cinnabar);
+  color: #B23A34;
+  font-weight: 500;
 }
 
 .archive-date {
@@ -457,10 +523,21 @@ page {
 }
 
 .archive-tags {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  margin-top: 6rpx;
+}
+
+.tag-icon {
+  font-size: 24rpx;
+  color: var(--zen-stone);
+  opacity: 0.6;
+}
+
+.tag-text {
   font-size: 22rpx;
   color: var(--zen-stone);
-  margin-top: 6rpx;
-  display: block;
   opacity: 0.7;
 }
 
@@ -563,5 +640,54 @@ page {
   letter-spacing: 0.35em;
   font-family: 'Noto Serif SC', serif;
   font-style: italic;
+}
+
+/* ==================== 退出登录按钮 ==================== */
+
+.logout-section {
+  margin-top: 60rpx;
+  margin-bottom: 40rpx;
+  padding: 0 20rpx;
+}
+
+.logout-btn {
+  width: 100%;
+  height: 96rpx;
+  background: transparent;
+  border: 2rpx solid rgba(178, 58, 52, 0.25);
+  border-radius: 48rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16rpx;
+  transition: all 0.3s ease;
+  
+  /* 重置按钮默认样式 */
+  padding: 0;
+  margin: 0;
+  line-height: normal;
+  
+  /* 移除按钮默认边框 */
+  &::after {
+    border: none;
+  }
+}
+
+.logout-btn-hover {
+  background: rgba(178, 58, 52, 0.05);
+  border-color: rgba(178, 58, 52, 0.4);
+}
+
+.logout-icon {
+  font-size: 40rpx;
+  color: rgba(178, 58, 52, 0.7);
+  font-weight: 300;
+}
+
+.logout-text {
+  font-size: 30rpx;
+  color: rgba(178, 58, 52, 0.7);
+  font-weight: 400;
+  letter-spacing: 0.15em;
 }
 </style>

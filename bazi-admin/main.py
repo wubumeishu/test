@@ -1,9 +1,24 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from starlette.middleware.sessions import SessionMiddleware
 from pydantic import BaseModel
 from contextlib import asynccontextmanager
-from src.database import init_db, close_db
-from src.routers import archive_router, fortune_router
+import os
+from dotenv import load_dotenv
+
+# 加载环境变量
+load_dotenv()
+
+from src.database import init_db, close_db, engine
+from src.core.redis import init_redis, close_redis
+from src.routers import archive_router, fortune_router, ai_router
+from src.routers.auth import router as auth_router
+
+# 导入管理后台
+from sqladmin import Admin
+from src.admin import UserAdmin, ArchiveAdmin, RecordAdmin, AdminAuth
+from src.admin.views import SMSMonitorView
 
 
 # 生命周期管理
@@ -11,7 +26,7 @@ from src.routers import archive_router, fortune_router
 async def lifespan(app: FastAPI):
     """
     应用生命周期管理
-    启动时初始化数据库，关闭时清理资源
+    启动时初始化数据库和 Redis，关闭时清理资源
     """
     # 启动时执行
     print("🚀 正在启动应用...")
@@ -21,11 +36,18 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"⚠️ 数据库初始化失败: {e}")
     
+    try:
+        await init_redis()
+        print("✅ Redis 初始化完成")
+    except Exception as e:
+        print(f"⚠️ Redis 初始化失败: {e}")
+    
     yield
     
     # 关闭时执行
     print("🛑 正在关闭应用...")
     await close_db()
+    await close_redis()
 
 
 # 创建 FastAPI 应用实例
@@ -36,6 +58,7 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+
 # 配置 CORS 跨域中间件
 app.add_middleware(
     CORSMiddleware,
@@ -45,9 +68,39 @@ app.add_middleware(
     allow_headers=["*"],  # 允许所有请求头
 )
 
+# 挂载静态文件目录
+# 前端可以通过 http://localhost:9000/static/xxx.png 访问静态资源
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+
+
+authentication_backend = AdminAuth(secret_key=os.getenv("SECRET_KEY_ADMIN", "a-very-secret-key"))
+
+# 挂载后台，增加中文标题栏
+admin = Admin(
+    app,
+    engine,
+    authentication_backend=authentication_backend,
+    title="云水禅心 · 管理后台",
+    base_url="/admin",
+    templates_dir="src/admin/templates", # 开启模板目录
+)
+
+# 注册管理后台视图
+admin.add_view(UserAdmin)
+admin.add_view(ArchiveAdmin)
+admin.add_view(RecordAdmin)
+
+# 注册开发工具
+admin.add_view(SMSMonitorView)
+
+print("✅ 管理后台已挂载到 /admin")
+
 # 注册路由
+app.include_router(auth_router)      # 认证路由
 app.include_router(archive_router)
 app.include_router(fortune_router)
+app.include_router(ai_router)
 
 
 # ==================== 数据模型 ====================

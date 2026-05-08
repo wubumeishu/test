@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <view class="page-container">
     <ZenHeader title="测算大厅" :show-menu="true" :show-history="true" @menu="handleMenu" @history="handleHistory" />
 
@@ -74,12 +74,8 @@
       </view>
 
       <view class="banner-section">
-        <ZenCard padding="0" class="daily-banner">
-          <image 
-            class="banner-bg" 
-            src="https://images.unsplash.com/photo-1579546929518-9e396f3cc809?q=80&w=400" 
-            mode="aspectFill"
-          ></image>
+        <ZenCard padding="0" class="daily-banner" @click="goToDailyFortune">
+          <view class="banner-bg-wrapper"></view>
           <view class="banner-content">
             <text class="banner-tag">DAILY FLOW</text>
             <text class="banner-title">今日运势</text>
@@ -125,14 +121,19 @@ const handleHistory = () => {
   uni.showToast({ title: '历史记录', icon: 'none' })
 }
 
+// 跳转到今日运势页
+const goToDailyFortune = () => {
+  uni.switchTab({ url: '/pages/index/index' })
+}
+
 // 跳转到 MBTI 测算页
 const goToMBTI = () => {
-  uni.navigateTo({ url: '/pages/questions/mbti' })
+  uni.navigateTo({ url: '/package_tests/pages/questions/mbti' })
 }
 
 // 跳转到塔罗占卜页
 const goToTarot = () => {
-  uni.navigateTo({ url: '/pages/questions/tarot' })
+  uni.navigateTo({ url: '/package_tests/pages/questions/tarot' })
 }
 
 // 网格项点击事件
@@ -140,7 +141,11 @@ const handleGridItemClick = (item: any) => {
   console.log('🔘 [questions] 点击网格项:', item)
   
   if (item.action === 'BAZI_SETUP') {
+    // 普通排盘：不带参数
     uni.navigateTo({ url: '/pages/bazi/setup' })
+  } else if (item.action === 'BAZI_DEEP') {
+    // 八字精批：携带 mode=depth 参数
+    uni.navigateTo({ url: '/pages/bazi/setup?mode=depth' })
   } else if (item.action === 'MBTI') {
     goToMBTI()
   } else if (item.action === 'REVEAL') {
@@ -152,8 +157,7 @@ const handleGridItemClick = (item: any) => {
 </script>
 
 <style scoped>
-@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,200,0,0&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;700&family=Inter:wght@300;400;500&display=swap');
+/* 页面样式 - Material Symbols 图标字体已在 App.vue 全局定义 */
 
 /* 全局变量 */
 .page-container {
@@ -451,13 +455,14 @@ const handleGridItemClick = (item: any) => {
   overflow: hidden;
 }
 
-.banner-bg {
+.banner-bg-wrapper {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  opacity: 0.2;
-  filter: grayscale(1);
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(178, 58, 52, 0.08) 0%, rgba(212, 175, 55, 0.12) 100%);
+  opacity: 0.6;
 }
 
 .banner-content {
@@ -500,5 +505,6 @@ const handleGridItemClick = (item: any) => {
   font-size: 18rpx;
   font-weight: 300;
   letter-spacing: 0.15em;
+  color: var(--zen-ink);
 }
 </style>

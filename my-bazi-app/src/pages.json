@@ -7,6 +7,12 @@
 			}
 		},
 		{
+			"path": "pages/login/login",
+			"style": {
+				"navigationStyle": "custom"
+			}
+		},
+		{
 			"path": "pages/questions/questions",
 			"style": {
 				"navigationStyle": "custom"
@@ -41,74 +47,10 @@
 			}
 		},
 		{
-			"path": "pages/archive/add",
+			"path": "pages/bazi/ai-setup",
 			"style": {
 				"navigationStyle": "custom",
-				"navigationBarTitleText": "编辑档案",
-				"enablePullDownRefresh": false
-			}
-		},
-		{
-			"path": "pages/archive/list",
-			"style": {
-				"navigationStyle": "custom",
-				"navigationBarTitleText": "档案库",
-				"enablePullDownRefresh": false
-			}
-		},
-		{
-			"path": "pages/questions/mbti",
-			"style": {
-				"navigationStyle": "custom",
-				"navigationBarTitleText": "MBTI 测试",
-				"enablePullDownRefresh": false
-			}
-		},
-		{
-			"path": "pages/questions/mbti-result",
-			"style": {
-				"navigationStyle": "custom",
-				"navigationBarTitleText": "MBTI 结果",
-				"enablePullDownRefresh": false
-			}
-		},
-		{
-			"path": "pages/questions/mbti-advanced",
-			"style": {
-				"navigationStyle": "custom",
-				"navigationBarTitleText": "64 型附加测试",
-				"enablePullDownRefresh": false
-			}
-		},
-		{
-			"path": "pages/questions/mbti-advanced-result",
-			"style": {
-				"navigationStyle": "custom",
-				"navigationBarTitleText": "64 型解析报告",
-				"enablePullDownRefresh": false
-			}
-		},
-		{
-			"path": "pages/questions/tarot",
-			"style": {
-				"navigationStyle": "custom",
-				"navigationBarTitleText": "塔罗占卜",
-				"enablePullDownRefresh": false
-			}
-		},
-		{
-			"path": "pages/questions/tarot-result",
-			"style": {
-				"navigationStyle": "custom",
-				"navigationBarTitleText": "塔罗解读",
-				"enablePullDownRefresh": false
-			}
-		},
-		{
-			"path": "pages/mine/history",
-			"style": {
-				"navigationStyle": "custom",
-				"navigationBarTitleText": "测算历史",
+				"navigationBarTitleText": "AI 八字精批",
 				"enablePullDownRefresh": false
 			}
 		},
@@ -119,6 +61,104 @@
 				"navigationBarBackgroundColor": "#667eea",
 				"navigationBarTextStyle": "white"
 			}
+		},
+		{
+			"path": "pages/legal/user-agreement",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "用户服务协议"
+			}
+		},
+		{
+			"path": "pages/legal/privacy-policy",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "隐私政策"
+			}
+		}
+	],
+	"subPackages": [
+		{
+			"root": "package_archive",
+			"pages": [
+				{
+					"path": "pages/archive/add",
+					"style": {
+						"navigationStyle": "custom",
+						"navigationBarTitleText": "编辑档案",
+						"enablePullDownRefresh": false
+					}
+				},
+				{
+					"path": "pages/archive/list",
+					"style": {
+						"navigationStyle": "custom",
+						"navigationBarTitleText": "档案库",
+						"enablePullDownRefresh": false
+					}
+				},
+				{
+					"path": "pages/history/history",
+					"style": {
+						"navigationStyle": "custom",
+						"navigationBarTitleText": "测算历史",
+						"enablePullDownRefresh": false
+					}
+				}
+			]
+		},
+		{
+			"root": "package_tests",
+			"pages": [
+				{
+					"path": "pages/questions/mbti",
+					"style": {
+						"navigationStyle": "custom",
+						"navigationBarTitleText": "MBTI 测试",
+						"enablePullDownRefresh": false
+					}
+				},
+				{
+					"path": "pages/questions/mbti-result",
+					"style": {
+						"navigationStyle": "custom",
+						"navigationBarTitleText": "MBTI 结果",
+						"enablePullDownRefresh": false
+					}
+				},
+				{
+					"path": "pages/questions/mbti-advanced",
+					"style": {
+						"navigationStyle": "custom",
+						"navigationBarTitleText": "64 型附加测试",
+						"enablePullDownRefresh": false
+					}
+				},
+				{
+					"path": "pages/questions/mbti-advanced-result",
+					"style": {
+						"navigationStyle": "custom",
+						"navigationBarTitleText": "64 型解析报告",
+						"enablePullDownRefresh": false
+					}
+				},
+				{
+					"path": "pages/questions/tarot",
+					"style": {
+						"navigationStyle": "custom",
+						"navigationBarTitleText": "塔罗占卜",
+						"enablePullDownRefresh": false
+					}
+				},
+				{
+					"path": "pages/questions/tarot-result",
+					"style": {
+						"navigationStyle": "custom",
+						"navigationBarTitleText": "塔罗解读",
+						"enablePullDownRefresh": false
+					}
+				}
+			]
 		}
 	],
 	"globalStyle": {

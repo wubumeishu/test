@@ -4,48 +4,48 @@
 
     <main class="main-scroll">
       <section class="top-card-section">
-        <ZenCard padding="0" class="top-banner">
-          <view class="banner-left">
-            <view class="ink-bg">
-              <!-- 月相图片：有图时显示，加载失败或无图时回退 cloud 图标 -->
-              <image
-                v-if="moonImageSrc"
-                class="moon-phase-img"
-                :src="moonImageSrc"
-                mode="aspectFit"
-                @error="onMoonImageError"
-              />
-              <text v-else class="material-symbols-outlined ink-icon">cloud</text>
-            </view>
-
-            <view class="banner-info">
-              <view v-if="isSolarTerm">
-                <text class="tag-text">二十四节气 · 第{{ solarTermIndex }}</text>
-                <text class="date-text">{{ displayLunarDate }} · 公历 {{ displaySolarDate }}</text>
-              </view>
-              <view v-else>
-                <text class="tag-text">月影禅心 · {{ yueXiangText }}</text>
-                <text class="date-text">{{ displayLunarDate }} · {{ displayWeekDay }}</text>
+        <ZenCard class="top-banner">
+          <view class="banner-container">
+            <view class="banner-left">
+              <view class="ink-bg">
+                <text class="material-symbols-outlined ink-icon">nights_stay</text>
               </view>
 
-              <view class="quote-area">
-                <text class="quote-text">{{ currentShortQuote }}</text>
+              <view class="banner-info">
+                <view class="info-top">
+                  <view v-if="isSolarTerm">
+                    <text class="tag-text">二十四节气 · 第{{ solarTermIndex }}</text>
+                    <text class="date-text">{{ displayLunarDate }} · 公历 {{ displaySolarDate }}</text>
+                  </view>
+                  <view v-else>
+                    <text class="tag-text">月影禅心 · {{ yueXiangText }}</text>
+                    <text class="date-text">{{ displayLunarDate }} · {{ displayWeekDay }}</text>
+                  </view>
+                </view>
+
+                <view class="quote-area">
+                  <text class="quote-text">{{ currentShortQuote }}</text>
+                </view>
               </view>
             </view>
-          </view>
 
-          <view class="banner-right">
-            <text class="writing-vertical brush-font">{{ solarChineseDateDisplay }}</text>
+            <view class="banner-right">
+              <text class="writing-vertical brush-font">{{ solarChineseDateDisplay }}</text>
+            </view>
           </view>
         </ZenCard>
       </section>
 
       <section class="fortune-index-section">
         <view class="brush-circle">
-          <svg class="svg-ring" viewBox="0 0 100 100">
-            <circle class="ring-bg" cx="50" cy="50" r="45"></circle>
-            <circle class="ring-progress" cx="50" cy="50" r="45" :style="{ strokeDashoffset: 283 - (283 * fortuneScore) / 100 }"></circle>
-          </svg>
+          <!-- 使用双半圆实现进度圆环 -->
+          <view class="ring-wrapper">
+            <view class="ring-bg"></view>
+            <view class="ring-progress-wrapper">
+              <view class="ring-left" :style="{ transform: fortuneScore >= 50 ? 'rotate(180deg)' : `rotate(${(fortuneScore / 50) * 180}deg)` }"></view>
+              <view class="ring-right" :style="{ transform: fortuneScore >= 50 ? `rotate(${((fortuneScore - 50) / 50) * 180}deg)` : 'rotate(0deg)' }"></view>
+            </view>
+          </view>
           <view class="score-box">
             <text class="score-num brush-font">{{ fortuneScore }}</text>
             <text class="score-label">今日运势指数</text>
@@ -68,16 +68,18 @@
 
       <section class="grid-section">
         <view class="fortune-grid">
-          <ZenCard padding="30rpx 0" class="grid-item" v-for="item in fortuneDimensions" :key="item.label">
-            <text class="material-symbols-outlined grid-icon">{{ item.icon }}</text>
-            <text class="grid-label">{{ item.label }}</text>
-            <view class="dots-row">
-              <view
-                class="dot"
-                v-for="i in 5"
-                :key="i"
-                :class="{ active: i <= item.level }"
-              ></view>
+          <ZenCard class="grid-item" v-for="item in fortuneDimensions" :key="item.label">
+            <view class="grid-content">
+              <text class="material-symbols-outlined grid-icon">{{ item.icon }}</text>
+              <text class="grid-label">{{ item.label }}</text>
+              <view class="dots-row">
+                <view
+                  class="dot"
+                  v-for="i in 5"
+                  :key="i"
+                  :class="{ active: i <= item.level }"
+                ></view>
+              </view>
             </view>
           </ZenCard>
         </view>
@@ -117,18 +119,21 @@
       </section>
 
       <section class="cta-section">
-        <ZenCard padding="40rpx" class="cta-card">
-          <image class="cta-bg" src="https://images.unsplash.com/photo-1518133910546-b6c2fb7d79e3?q=80&w=400" mode="aspectFill"></image>
-          <view class="cta-content">
-            <view class="cta-tag-row">
-              <view class="cta-line"></view>
-              <text class="cta-tag">大师亲测</text>
+        <ZenCard class="cta-card">
+          <view class="cta-container">
+            <!-- 使用服务器托管的背景图 -->
+            <view class="cta-bg"></view>
+            <view class="cta-content">
+              <view class="cta-tag-row">
+                <view class="cta-line"></view>
+                <text class="cta-tag">大师亲测</text>
+              </view>
+              <text class="cta-title">年度深度运势解析</text>
+              <text class="cta-desc">探寻生命律动，预见未来先机</text>
             </view>
-            <text class="cta-title">年度深度运势解析</text>
-            <text class="cta-desc">探寻生命律动，预见未来先机</text>
-          </view>
-          <view class="cta-arrow">
-            <text class="material-symbols-outlined">arrow_forward</text>
+            <view class="cta-arrow">
+              <text class="material-symbols-outlined">arrow_forward</text>
+            </view>
           </view>
         </ZenCard>
       </section>
@@ -146,14 +151,27 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
 import ZenHeader from '@/components/ZenHeader/ZenHeader.vue'
 import ZenCard from '@/components/ZenCard/ZenCard.vue'
 import ZenTabBar from '@/components/ZenTabBar/ZenTabBar.vue'
 import { Solar } from 'lunar-javascript'
 import { useArchiveStore } from '@/store/useArchiveStore'
+import { useUserStore } from '@/store/useUserStore'
 
 // --- 档案 Store ---
 const archiveStore = useArchiveStore()
+const userStore    = useUserStore()
+
+// ── 页面守卫：每次页面显示时检查登录态 ──
+// onShow 在从其他页面返回时也会触发，比 onMounted 更可靠。
+// 使用 reLaunch 清空页面栈，防止用户按返回键回到首页。
+onShow(() => {
+  if (!userStore.token) {
+    console.log('[Index.onShow] 未检测到 token，reLaunch → /pages/login/login')
+    uni.reLaunch({ url: '/pages/login/login' })
+  }
+})
 
 // --- 实时日期状态 ---
 const displaySolarDate     = ref('')          // 例：5月1日
@@ -167,36 +185,18 @@ const isSolarTerm      = ref(false)
 const currentSolarTerm = ref('')
 const solarTermIndex   = ref(0)
 const lunarMonthDay    = ref('')
-const moonPhaseName    = ref('')   // 月相名（getYueXiang），如：蛾眉、望
-const yueXiang         = ref('')   // 同上，用于 almanac-header 显示
-const yueXiangText     = ref('')   // 同上，语义化别名，供模板绑定
-const moonImageSrc     = ref('')   // 月相图片路径
-const dayYiList        = ref<string[]>([])  // 宜，取前两项
-const dayJiList        = ref<string[]>([])  // 忌，取前两项
+const moonPhaseName    = ref('')
+const yueXiang         = ref('')
+const yueXiangText     = ref('')
+const dayYiList        = ref<string[]>([])
+const dayJiList        = ref<string[]>([])
 
-// ── 月相图片映射（农历日 1-30 → 8 种基础月相图）──
-const getMoonPhaseImage = (day: number): string => {
-  const base = '../../static/moon/'
-  if (day === 1 || day === 30) return `${base}phase-1.svg`  // 新月 / 朔 / 晦
-  if (day >= 2  && day <= 6)   return `${base}phase-2.svg`  // 蛾眉月（上升）
-  if (day === 7 || day === 8)  return `${base}phase-3.svg`  // 上弦月
-  if (day >= 9  && day <= 14)  return `${base}phase-4.svg`  // 盈凸月
-  if (day === 15 || day === 16) return `${base}phase-5.svg` // 满月 / 望
-  if (day >= 17 && day <= 21)  return `${base}phase-6.svg`  // 亏凸月
-  if (day === 22 || day === 23) return `${base}phase-7.svg` // 下弦月
-  if (day >= 24 && day <= 29)  return `${base}phase-8.svg`  // 残月（蛾眉亏）
-  return `${base}phase-1.svg`  // 兜底
-}
-
-// 月相图片加载失败时回退到占位符
-const onMoonImageError = () => {
-  moonImageSrc.value = ''
-}
 // ==================== 禅意语录库 ====================
 const shortQuotes = [
   '风起，宜敛神',
   '水复，宜静心',
   '云散，且徐行',
+
   '月明，宜远望',
   '花开，且从容',
 ]
@@ -306,12 +306,11 @@ onMounted(() => {
   lunarMonthDay.value    = lunarStr
 
   // ── 月相 & 黄历宜忌 ──
-  const lunarDay = lunar.getDay()           // 农历数字日（1-30），用于图片映射
+  const lunarDay = lunar.getDay()
   const xiang = lunar.getYueXiang()
   moonPhaseName.value  = xiang
   yueXiang.value       = xiang
   yueXiangText.value   = xiang
-  moonImageSrc.value   = getMoonPhaseImage(lunarDay)
   dayYiList.value = (lunar.getDayYi() as string[]).slice(0, 2)
   dayJiList.value = (lunar.getDayJi() as string[]).slice(0, 2)
 
@@ -360,14 +359,13 @@ onMounted(() => {
 </script>
 
 <style scoped>
-@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,200,0,0&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700&family=Ma+Shan+Zheng&display=swap');
+/* 页面样式 - Material Symbols 图标字体已在 App.vue 全局定义 */
 
 /* 布局基础 */
 .page-container {
   min-height: 100vh;
   background-color: #F9F6F1;
-  background-image: url("https://www.transparenttextures.com/patterns/handmade-paper.png");
+  background-image: url("/static/handmade-paper.png");
 }
 
 /* 主内容滚动 */
@@ -379,6 +377,10 @@ onMounted(() => {
 
 /* 顶部 Banner */
 .top-banner {
+  overflow: hidden;
+}
+
+.banner-container {
   height: 380rpx;
   display: flex;
   overflow: hidden;
@@ -387,7 +389,7 @@ onMounted(() => {
 .banner-left {
   flex: 1;
   position: relative;
-  padding: 50rpx;
+  padding: 40rpx;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -395,37 +397,45 @@ onMounted(() => {
 
 .ink-bg {
   position: absolute;
-  inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  opacity: 0.15;
+  pointer-events: none;
 }
 
 .ink-icon {
-  font-size: 240rpx;
-  transform: rotate(12deg);
-  color: #333;
+  font-size: 160rpx;
+  color: rgba(92, 74, 56, 0.25);
 }
 
-/* 月相图片：撑满 ink-bg 容器，保持透明度与背景装饰一致 */
-.moon-phase-img {
-  width: 220rpx;
-  height: 220rpx;
-  opacity: 0.25;
-  filter: sepia(0.3);
+.banner-info {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 100%;
+}
+
+.info-top {
+  display: block;
 }
 
 .tag-text {
   display: block;
-  font-size: 20rpx;
+  font-size: 22rpx;
   font-weight: bold;
   color: #B23A34;
-  letter-spacing: 0.3em;
+  letter-spacing: 0.2em;
   margin-bottom: 8rpx;
 }
 
 .date-text {
+  display: block;
   font-size: 24rpx;
   color: rgba(51, 51, 51, 0.6);
   letter-spacing: 0.1em;
@@ -433,11 +443,12 @@ onMounted(() => {
 
 .quote-area {
   border-left: 2rpx solid rgba(178, 58, 52, 0.3);
-  padding-left: 24rpx;
-  margin-right: 40rpx;
+  padding-left: 20rpx;
+  margin-top: 20rpx;
 }
 
 .quote-text {
+  display: block;
   font-size: 24rpx;
   line-height: 1.6;
   color: rgba(51, 51, 51, 0.8);
@@ -487,35 +498,92 @@ onMounted(() => {
   margin-bottom: 40rpx;
 }
 
-.svg-ring {
+/* 圆环包裹器 */
+.ring-wrapper {
   position: absolute;
   width: 100%;
   height: 100%;
-  transform: rotate(-90deg);
 }
 
+/* 背景圆环 */
 .ring-bg {
-  fill: none;
-  stroke: #D4AF37;
-  stroke-width: 1;
-  opacity: 0.2;
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  border: 3rpx solid rgba(212, 175, 55, 0.2);
+  box-sizing: border-box;
 }
 
-.ring-progress {
-  fill: none;
-  stroke: #B23A34;
-  stroke-width: 3;
-  stroke-linecap: round;
-  stroke-dasharray: 283;
-  transition: stroke-dashoffset 1s ease-out;
+/* 进度圆环包裹器 */
+.ring-progress-wrapper {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  overflow: hidden;
+}
+
+/* 左半圆 */
+.ring-left {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 50%;
+  height: 100%;
+  overflow: hidden;
+  transform-origin: right center;
+  transition: transform 1s ease-out;
+}
+
+.ring-left::before {
+  content: '';
+  position: absolute;
+  top: 3rpx;
+  left: 3rpx;
+  right: 0;
+  bottom: 3rpx;
+  border: 6rpx solid #B23A34;
+  border-radius: 180rpx 0 0 180rpx;
+  border-right: none;
+  box-sizing: border-box;
+  transform-origin: right center;
+}
+
+/* 右半圆 */
+.ring-right {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 50%;
+  height: 100%;
+  overflow: hidden;
+  transform-origin: left center;
+  transition: transform 1s ease-out;
+}
+
+.ring-right::before {
+  content: '';
+  position: absolute;
+  top: 3rpx;
+  left: 0;
+  right: 3rpx;
+  bottom: 3rpx;
+  border: 6rpx solid #B23A34;
+  border-radius: 0 180rpx 180rpx 0;
+  border-left: none;
+  box-sizing: border-box;
+  transform-origin: left center;
 }
 
 .score-box {
+  position: relative;
   text-align: center;
   z-index: 10;
 }
 
 .score-num {
+  display: block;
   font-size: 100rpx;
   color: #B23A34;
   line-height: 1;
@@ -574,38 +642,46 @@ onMounted(() => {
 .fortune-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 30rpx;
+  gap: 20rpx;
   margin-bottom: 60rpx;
 }
 
 .grid-item {
-  padding: 30rpx 0;
+  overflow: hidden;
+}
+
+.grid-content {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
+  padding: 40rpx 20rpx;
+  min-height: 220rpx;
 }
 
 .grid-icon {
   color: rgba(178, 58, 52, 0.6);
-  font-size: 48rpx;
-  margin-bottom: 12rpx;
+  font-size: 56rpx;
+  margin-bottom: 16rpx;
 }
 
 .grid-label {
-  font-size: 24rpx;
+  font-size: 26rpx;
   font-weight: 500;
   letter-spacing: 0.1em;
+  margin-bottom: 12rpx;
+  color: #333;
 }
 
 .dots-row {
   display: flex;
-  gap: 4rpx;
-  margin-top: 16rpx;
+  gap: 6rpx;
+  margin-top: 8rpx;
 }
 
 .dot {
-  width: 8rpx;
-  height: 8rpx;
+  width: 10rpx;
+  height: 10rpx;
   border-radius: 50%;
   background: rgba(178, 58, 52, 0.1);
 }
@@ -710,20 +786,29 @@ onMounted(() => {
 
 /* 底部引导卡片 */
 .cta-card {
-  height: 280rpx;
-  position: relative;
   overflow: hidden;
+}
+
+.cta-container {
+  position: relative;
+  height: 280rpx;
   display: flex;
   align-items: center;
+  padding: 40rpx;
+  overflow: hidden;
 }
 
 .cta-bg {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  filter: grayscale(0.5);
-  opacity: 0.3;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  /* 临时使用渐变背景，消除 404 错误 */
+  /* 等服务器文件上传成功后，可以改回图片：background-image: url('https://api.aiyuechuan.cn/static/cta-bg.jpg'); */
+  background: linear-gradient(135deg, rgba(178, 58, 52, 0.08) 0%, rgba(212, 175, 55, 0.12) 100%);
+  opacity: 0.6;
+  z-index: 0;
 }
 
 .cta-content {
@@ -762,6 +847,7 @@ onMounted(() => {
 }
 
 .cta-desc {
+  display: block;
   font-size: 20rpx;
   color: rgba(51, 51, 51, 0.6);
   letter-spacing: 0.2em;

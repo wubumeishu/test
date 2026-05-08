@@ -1,74 +1,92 @@
-# 八字后端服务 (bazi-admin)
+# 云水禅心 · 后端（FastAPI）
 
-基于 FastAPI 的八字应用后端 API 服务
+基于 **FastAPI + PostgreSQL** 的八字应用后端 API 服务，部署在 `https://api.aiyuechuan.cn`。
 
-## 技术栈
+---
 
-- **FastAPI**: 现代化的 Python Web 框架
-- **SQLAlchemy**: 异步 ORM
-- **PostgreSQL**: 数据库
-- **Uvicorn**: ASGI 服务器
-- **lunar-python**: 农历和八字计算库
+## 目录结构
 
-## 安装依赖
+```
+bazi-admin/
+├── main.py                 # 应用入口，路由注册，CORS，静态文件挂载
+├── requirements.txt        # Python 依赖
+├── .env                    # 环境变量（不进 git）
+├── .env.example            # 环境变量模板
+├── alembic/                # 数据库迁移
+│   └── versions/           # 迁移脚本
+├── deploy/
+│   ├── nginx.conf          # Nginx 反向代理配置
+│   ├── gunicorn.conf.py    # Gunicorn 配置
+│   └── zenfortune.service  # systemd 服务配置
+├── static/                 # 云端静态资源
+│   ├── fonts/              # 字体文件（子集化）
+│   ├── tarot/              # 塔罗牌图片
+│   ├── handmade-paper.png
+│   ├── logo.png
+│   └── cta-bg.jpg
+└── src/
+    ├── database.py         # 异步数据库连接
+    ├── routers/
+    │   ├── auth.py         # 认证（注册 / 登录 / 验证码）
+    │   ├── fortune.py      # 八字排盘 & 记录管理
+    │   ├── archive.py      # 档案 CRUD & 云端同步
+    │   └── ai.py           # AI 流式分析（SSE）
+    ├── models/
+    │   ├── user.py         # 用户模型
+    │   ├── archive.py      # 档案模型
+    │   └── record.py       # 测算记录模型
+    ├── schemas/
+    │   ├── auth.py         # 认证请求/响应
+    │   ├── bazi.py         # 排盘请求/响应
+    │   └── archive.py      # 档案请求/响应
+    ├── services/
+    │   └── bazi_engine.py  # 八字计算核心引擎
+    ├── core/
+    │   ├── security.py     # JWT 生成与验证
+    │   └── redis.py        # Redis 连接（验证码存储）
+    └── api/
+        └── deps.py         # 依赖注入（get_current_user）
+```
+
+---
+
+## 快速启动
+
+### 1. 安装依赖
 
 ```bash
 pip install -r requirements.txt
 ```
 
-## 数据库配置
+### 2. 配置环境变量
 
-### 1. 安装 PostgreSQL
-
-确保已安装 PostgreSQL 数据库。
-
-### 2. 创建数据库
-
-```sql
-CREATE DATABASE bazi_db;
+```bash
+cp .env.example .env
 ```
 
-### 3. 配置环境变量
-
-修改 `.env` 文件中的数据库连接信息：
+编辑 `.env`：
 
 ```env
-DATABASE_URL=postgresql+asyncpg://用户名:密码@localhost:5432/bazi_db
+DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/zen_bazi
+SECRET_KEY=your-secret-key-here
+REDIS_URL=redis://localhost:6379/0
+DEEPSEEK_API_KEY=your-deepseek-api-key
 ```
 
-### 4. 初始化数据库
-
-启动服务时会自动创建表结构。
-
-## 启动服务
+### 3. 启动服务
 
 ```bash
 uvicorn main:app --host 127.0.0.1 --port 9000 --reload
 ```
 
-## API 文档
+启动时自动执行 `init_db()`，创建所有数据库表。
 
-启动服务后访问：
+### 4. 访问 API 文档
 
-- Swagger UI: http://127.0.0.1:9000/docs
-- ReDoc: http://127.0.0.1:9000/redoc
+- Swagger UI：`http://127.0.0.1:9000/docs`
+- ReDoc：`http://127.0.0.1:9000/redoc`
 
-## 项目结构
-
-```
-bazi-admin/
-├── main.py                 # 主应用入口
-├── requirements.txt        # Python 依赖
-├── .env                    # 环境变量配置
-├── src/
-│   ├── __init__.py
-│   ├── database.py         # 数据库连接配置
-│   └── models/
-│       ├── __init__.py
-│       ├── base.py         # Base 模型类
-│       └── user.py         # 用户模型示例
-└── README.md
-```
+---
 
 ## API 接口
 
@@ -78,43 +96,140 @@ bazi-admin/
 GET /api/health
 ```
 
-### 八字分析
+### 认证 `/api/auth`
 
-```
-POST /api/analyze
-Content-Type: application/json
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `POST` | `/api/auth/send-code` | 发送手机验证码（存入 Redis，60s 过期） |
+| `POST` | `/api/auth/register` | 注册，返回 JWT |
+| `POST` | `/api/auth/login` | 密码登录，返回 JWT |
+| `POST` | `/api/auth/login/code` | 验证码登录，返回 JWT |
 
+### 八字排盘 `/api/fortune`
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `POST` | `/api/fortune/calculate` | 通过档案 ID 排盘，结果存入数据库 |
+| `POST` | `/api/fortune/calculate-by-data` | 直接传入生辰数据排盘 |
+| `GET` | `/api/fortune/records` | 获取测算记录列表（`limit` / `offset` 分页） |
+| `GET` | `/api/fortune/records/{record_id}` | 获取单条记录详情 |
+| `DELETE` | `/api/fortune/records/{record_id}` | 删除测算记录 |
+
+**排盘请求示例：**
+
+```json
+POST /api/fortune/calculate-by-data
 {
-  "bazi_string": "甲子 乙丑 丙寅 丁卯"
+  "name": "张三",
+  "gender": 1,
+  "birth_year": 1990,
+  "birth_month": 5,
+  "birth_day": 15,
+  "birth_hour": 8,
+  "birth_minute": 30,
+  "is_lunar": false,
+  "is_deep_analysis": false
 }
 ```
 
-## 数据库使用示例
+### AI 分析 `/api/ai`
 
-```python
-from fastapi import Depends
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from src.database import get_db
-from src.models.user import User
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `GET` | `/api/ai/stream/{record_id}` | 流式 AI 深度解析（SSE，`text/event-stream`） |
 
-@app.get("/users")
-async def get_users(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(User))
-    users = result.scalars().all()
-    return users
+SSE 数据格式：
+
+```
+data: {"text": "...", "done": false}
+data: {"text": "", "done": true, "total": 1234, "cached": false}
 ```
 
-## 开发说明
+### 档案管理 `/api/archives`
 
-1. 所有模型都应继承 `src.models.base.Base`
-2. 使用 `TimestampMixin` 自动添加时间戳字段
-3. 使用 `get_db()` 进行依赖注入获取数据库会话
-4. 数据库操作使用异步方式
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `POST` | `/api/archives/sync` | 档案云端同步（归宗算法） |
+| `GET` | `/api/archives/list` | 获取用户所有档案 |
+| `DELETE` | `/api/archives/{archive_id}` | 删除指定档案 |
+
+**归宗算法**：以 `local_created_at` 时间戳为仲裁依据，本地更新则覆盖云端，否则保留云端版本。
+
+### 静态文件
+
+```
+GET /static/{path}
+```
+
+由 Nginx 直接 serve（不经过 Python），配置了 30 天缓存和 CORS 头。
+
+---
+
+## 数据库模型
+
+### `users` 表
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `id` | UUID | 主键 |
+| `phone` | VARCHAR | 手机号（唯一） |
+| `hashed_password` | VARCHAR | bcrypt 哈希密码 |
+| `created_at` | TIMESTAMP | 注册时间 |
+
+### `archives` 表
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `archive_id` | UUID | 主键（前端生成） |
+| `user_id` | UUID | 关联用户 |
+| `name` | VARCHAR | 命主姓名 |
+| `gender` | INTEGER | 性别（1=男，0=女） |
+| `birth_year/month/day/hour/minute` | INTEGER | 生辰 |
+| `is_lunar` | BOOLEAN | 是否农历 |
+| `tags` | ARRAY | 标签 |
+| `is_default` | BOOLEAN | 是否默认档案 |
+| `local_created_at` | BIGINT | 本地时间戳（毫秒，归宗仲裁依据） |
+
+### `records` 表
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `record_id` | UUID | 主键 |
+| `user_id` | UUID | 关联用户 |
+| `archive_id` | UUID | 关联档案（可为空） |
+| `bazi_str` | VARCHAR | 八字字符串 |
+| `five_elements_json` | JSONB | 完整排盘结果 |
+| `ai_report_markdown` | TEXT | AI 深度分析报告 |
+| `is_deep_analysis` | BOOLEAN | 是否深度分析 |
+| `created_at` | TIMESTAMP | 创建时间 |
+
+---
+
+## 服务器部署
+
+参考 `deploy/` 目录：
+
+```bash
+# 复制 Nginx 配置
+sudo cp deploy/nginx.conf /etc/nginx/sites-available/zenfortune
+sudo ln -s /etc/nginx/sites-available/zenfortune /etc/nginx/sites-enabled/
+sudo nginx -t && sudo systemctl reload nginx
+
+# 安装 systemd 服务
+sudo cp deploy/zenfortune.service /etc/systemd/system/
+sudo systemctl enable zenfortune
+sudo systemctl start zenfortune
+```
+
+Nginx 配置要点：
+- `location /static/` 直接 serve 磁盘文件，字体文件设置 `Access-Control-Allow-Origin: *` 和 30 天缓存
+- `location /` 反向代理到 Gunicorn（`127.0.0.1:9000`），AI 接口超时设为 120s
+
+---
 
 ## 注意事项
 
-- 开发环境下 CORS 允许所有来源
-- 生产环境需要配置具体的允许来源
-- 数据库连接使用异步引擎
-- 确保 PostgreSQL 服务正在运行
+- 所有需要登录的接口通过 `Depends(get_current_user)` 注入当前用户，从 JWT 解析 `user_id`
+- 验证码存储在 Redis，Key 格式：`sms_code:{phone}`，TTL 60 秒
+- AI 流式接口使用 `StreamingResponse`，前端通过微信 `wx.request({ enableChunked: true })` 接收
+- 生产环境 CORS 已限制为小程序域名，开发环境允许所有来源

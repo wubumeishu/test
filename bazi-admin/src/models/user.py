@@ -3,7 +3,8 @@
 """
 from typing import Optional
 from uuid import uuid4
-from sqlalchemy import String
+from datetime import datetime
+from sqlalchemy import String, DateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID
 from src.models.base import Base, TimestampMixin
@@ -49,6 +50,18 @@ class User(Base, TimestampMixin):
         String(500),
         nullable=True,
         comment="头像 URL"
+    )
+    
+    hashed_password: Mapped[Optional[str]] = mapped_column(
+        String(255),
+        nullable=True,
+        comment="密码哈希值"
+    )
+    
+    last_login: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="最后登录时间"
     )
     
     # 关联关系

@@ -31,6 +31,13 @@
 <script setup lang="ts">
 import { defineProps, defineEmits } from 'vue'
 
+// 配置组件选项：关闭样式隔离，允许父组件样式穿透
+defineOptions({
+  options: {
+    styleIsolation: 'shared'
+  }
+})
+
 // 定义 Props
 interface Props {
   title: string
@@ -74,8 +81,7 @@ const handleHistory = () => {
 </script>
 
 <style scoped>
-@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,200,0,0&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;700&display=swap');
+/* 页面样式 - Material Symbols 图标字体已在 App.vue 全局定义 */
 
 .zen-header {
   position: sticky;
@@ -113,7 +119,7 @@ const handleHistory = () => {
 }
 
 .header-title {
-  font-family: 'Noto Serif SC', serif;
+  font-family: 'STSong', 'SimSun', 'Songti SC', 'Noto Serif SC', serif;
   font-size: 36rpx;
   font-weight: 500;
   color: #2C2C2C;

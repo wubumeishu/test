@@ -1,6 +1,6 @@
-<template>
+﻿<template>
   <view class="page-container">
-    <ZenHeader title="排盘信息" :show-back="true" />
+    <ZenHeader :title="pageTitle" :show-back="true" />
 
     <main class="main-content">
       <!-- Tab 切换 -->
@@ -164,17 +164,147 @@
         </view>
       </view>
     </main>
+
+    <!-- ══════════════════════════════════════
+         Premium Modal：AI 精批拦截弹窗
+    ══════════════════════════════════════ -->
+    <view v-if="showPremiumModal" class="premium-overlay" @click="closePremiumModal">
+      <view class="premium-modal" @click.stop>
+        <!-- 顶部装饰 -->
+        <view class="modal-glow"></view>
+        
+        <!-- 图标 -->
+        <view class="modal-icon-wrap">
+          <text class="material-symbols-outlined modal-icon">auto_awesome</text>
+        </view>
+
+        <!-- 标题 -->
+        <text class="modal-title">AI 深度解析</text>
+        
+        <!-- 描述 -->
+        <text class="modal-desc">
+          结合大模型，为您提供万字深度的心理与命运解析。此为高级服务。
+        </text>
+
+        <!-- 按钮组 -->
+        <view class="modal-actions">
+          <view class="modal-btn modal-btn--secondary" hover-class="btn-hover" @click="handleVipClick">
+            <text class="material-symbols-outlined btn-icon">workspace_premium</text>
+            <text class="btn-text">解锁 VIP</text>
+            <text class="btn-hint">(暂未开放)</text>
+          </view>
+          
+          <view class="modal-btn modal-btn--primary" hover-class="btn-hover" @click="handleMockAd">
+            <text class="material-symbols-outlined btn-icon">play_circle</text>
+            <text class="btn-text">看视频免费解锁</text>
+          </view>
+        </view>
+
+        <!-- 关闭按钮 -->
+        <view class="modal-close" @click="closePremiumModal">
+          <text class="material-symbols-outlined">close</text>
+        </view>
+      </view>
+    </view>
   </view>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
-import { onShow } from '@dcloudio/uni-app'
+import { ref, reactive, computed, onMounted } from 'vue'
+import { onShow, onLoad } from '@dcloudio/uni-app'
 import { Solar, Lunar } from 'lunar-javascript'
 import ZenHeader from '@/components/ZenHeader/ZenHeader.vue'
 import { useArchiveStore } from '@/store/useArchiveStore'
 import { useBaziStore } from '@/store/useBaziStore'
 import type { Archive } from '@/store/useArchiveStore'
+
+// ==================== 页面参数 ====================
+const mode = ref<string>('') // 'depth' 表示 AI 精批模式
+
+onLoad((options: Record<string, string> = {}) => {
+  mode.value = options.mode || ''
+  console.log('📋 [setup] 页面加载，mode:', mode.value)
+})
+
+// 动态标题
+const pageTitle = computed(() => {
+  return mode.value === 'depth' ? 'AI 深度解析' : '排盘信息'
+})
+
+// ==================== Premium Modal 状态 ====================
+const showPremiumModal = ref(false)
+const pendingArchive = ref<Archive | null>(null) // 暂存选中的档案
+const pendingQuickForm = ref<any>(null) // 暂存快速排盘表单
+
+// 打开弹窗
+const openPremiumModal = () => {
+  showPremiumModal.value = true
+}
+
+// 关闭弹窗
+const closePremiumModal = () => {
+  showPremiumModal.value = false
+  pendingArchive.value = null
+  pendingQuickForm.value = null
+}
+
+// VIP 按钮点击
+const handleVipClick = () => {
+  uni.showToast({
+    title: 'VIP 系统建设中',
+    icon: 'none',
+    duration: 1500
+  })
+}
+
+// 模拟广告逻辑
+const handleMockAd = async () => {
+  const archiveToProcess = pendingArchive.value
+  const formToProcess = pendingQuickForm.value
+  
+  closePremiumModal()
+  
+  // ── 第一阶段：模拟广告加载，同时发起排盘请求（不含 AI）──────────
+  uni.showLoading({ title: '正在加载广告...', mask: true })
+
+  // 并行发起排盘请求（is_deep_analysis 仍为 true，用于标记记录类型）
+  const baziRequestPromise = (async () => {
+    if (archiveToProcess) {
+      return await baziStore.calculateByArchive(archiveToProcess.id, true)
+    } else if (formToProcess) {
+      return await baziStore.calculateByData({ ...formToProcess, is_deep_analysis: true })
+    } else {
+      throw new Error('没有待处理的排盘数据')
+    }
+  })()
+
+  // ── 第二阶段：模拟广告播放 2.5 秒 ──────────────────────────────
+  await new Promise(resolve => setTimeout(resolve, 2500))
+  uni.showLoading({ title: '广告观看完成，正在解析命盘...', mask: true })
+
+  // ── 第三阶段：等待排盘完成（通常 < 1 秒，早已完成）──────────────
+  try {
+    await baziRequestPromise
+    uni.hideLoading()
+
+    const recordId = baziStore.currentBaziData?.record_id
+    // 跳转结果页，携带 stream=1 标记，结果页会自动发起流式 AI 请求
+    uni.navigateTo({
+      url: recordId
+        ? `/pages/result/result?record_id=${recordId}&stream=1`
+        : '/pages/result/result',
+      fail: (err) => console.error('❌ [setup] 跳转失败:', err)
+    })
+  } catch (error: any) {
+    console.error('❌ [setup] 排盘失败:', error)
+    uni.hideLoading()
+    uni.showModal({
+      title: '解析失败',
+      content: error.message || '网络异常，请稍后重试',
+      showCancel: false
+    })
+  }
+}
 
 // 强制隐藏原生 TabBar
 onMounted(() => {
@@ -210,7 +340,7 @@ const quickForm = reactive({
 // 跳转到新建档案页
 const goToCreateArchive = () => {
   uni.navigateTo({
-    url: '/pages/archive/add'
+    url: '/package_archive/pages/archive/add'
   })
 }
 
@@ -259,21 +389,25 @@ const selectArchive = async (archive: Archive) => {
   try {
     console.log('📋 [setup] 选择档案:', archive)
 
-    // 显示加载提示
+    // ── AI 精批模式：拦截并弹窗 ──
+    if (mode.value === 'depth') {
+      pendingArchive.value = archive
+      openPremiumModal()
+      return
+    }
+
+    // ── 普通排盘模式：直接请求 ──
     uni.showLoading({
       title: '正在排盘...',
       mask: true
     })
 
-    // 调用排盘接口（后端会从档案查出姓名并写入响应的 name 字段）
     await baziStore.calculateByArchive(archive.id)
 
-    // 隐藏加载提示
     uni.hideLoading()
 
     console.log('✅ [setup] 排盘成功，跳转到结果页')
 
-    // 跳转到结果页
     uni.navigateTo({
       url: '/pages/result/result'
     })
@@ -319,18 +453,11 @@ const quickCalculate = async () => {
   try {
     console.log('🚀 [setup] 开始快速排盘:', quickForm)
 
-    // 显示加载提示
-    uni.showLoading({
-      title: '正在排盘...',
-      mask: true
-    })
-
     // 解析日期和时间
     const [year, month, day] = quickForm.birthDate.split('-').map(Number)
     const [hour, minute] = quickForm.birthTime.split(':').map(Number)
 
-    // 调用排盘接口
-    await baziStore.calculateByData({
+    const formData = {
       name: quickForm.name.trim(),
       gender: quickForm.gender,
       birth_year: year,
@@ -340,14 +467,27 @@ const quickCalculate = async () => {
       birth_minute: minute,
       is_lunar: quickForm.isLunar,
       is_deep_analysis: false
+    }
+
+    // ── AI 精批模式：拦截并弹窗 ──
+    if (mode.value === 'depth') {
+      pendingQuickForm.value = formData
+      openPremiumModal()
+      return
+    }
+
+    // ── 普通排盘模式：直接请求 ──
+    uni.showLoading({
+      title: '正在排盘...',
+      mask: true
     })
 
-    // 隐藏加载提示
+    await baziStore.calculateByData(formData)
+
     uni.hideLoading()
 
     console.log('✅ [setup] 排盘成功，跳转到结果页')
 
-    // 跳转到结果页
     uni.navigateTo({
       url: '/pages/result/result'
     })
@@ -359,8 +499,7 @@ const quickCalculate = async () => {
 </script>
 
 <style scoped>
-@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,200,0,0&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;700&family=Inter:wght@300;400;500&display=swap');
+/* 页面样式 - Material Symbols 图标字体已在 App.vue 全局定义 */
 
 /* CSS 变量定义在根容器 */
 .page-container {
@@ -467,6 +606,7 @@ const quickCalculate = async () => {
 /* 第一行：姓名 + 性别 + 默认标签 */
 .archive-header {
   display: flex;
+  flex-direction: row;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 20rpx;
@@ -503,6 +643,10 @@ const quickCalculate = async () => {
   border-radius: 6rpx;
   flex-shrink: 0;
   margin-left: 16rpx;
+  align-self: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .badge-text {
@@ -744,5 +888,195 @@ const quickCalculate = async () => {
   color: #fff;
   letter-spacing: 0.15em;
   font-weight: 300;
+}
+
+/* ══════════════════════════════════════
+   Premium Modal：AI 精批拦截弹窗
+══════════════════════════════════════ */
+
+/* 全屏遮罩 */
+.premium-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* 毛玻璃背景 */
+  background: rgba(20, 20, 20, 0.6);
+  backdrop-filter: blur(15px);
+  -webkit-backdrop-filter: blur(15px);
+  animation: overlayFadeIn 0.3s ease forwards;
+}
+
+@keyframes overlayFadeIn {
+  0%   { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+/* 弹窗主体 */
+.premium-modal {
+  position: relative;
+  width: 620rpx;
+  max-width: 90vw;
+  background: rgba(252, 250, 248, 0.95);
+  backdrop-filter: blur(30px);
+  -webkit-backdrop-filter: blur(30px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 32rpx;
+  padding: 90rpx 70rpx 70rpx;
+  box-shadow: 
+    0 24rpx 80rpx rgba(0, 0, 0, 0.35),
+    0 0 1px rgba(212, 175, 55, 0.5);
+  animation: modalSlideIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+@keyframes modalSlideIn {
+  0%   { transform: scale(0.8) translateY(40rpx); opacity: 0; }
+  100% { transform: scale(1) translateY(0); opacity: 1; }
+}
+
+/* 顶部装饰光晕 */
+.modal-glow {
+  position: absolute;
+  top: -60rpx;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 200rpx;
+  height: 200rpx;
+  background: radial-gradient(circle, rgba(212, 175, 55, 0.3) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+/* 图标 */
+.modal-icon-wrap {
+  width: 120rpx;
+  height: 120rpx;
+  margin: 0 auto 40rpx;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(178, 58, 52, 0.1) 0%, rgba(212, 175, 55, 0.15) 100%);
+  border: 1px solid rgba(212, 175, 55, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8rpx 24rpx rgba(212, 175, 55, 0.2);
+}
+
+.modal-icon {
+  font-size: 64rpx;
+  font-weight: 200;
+  color: #D4AF37;
+}
+
+/* 标题 */
+.modal-title {
+  display: block;
+  font-family: 'Noto Serif SC', serif;
+  font-size: 40rpx;
+  font-weight: 500;
+  color: var(--zen-ink);
+  text-align: center;
+  letter-spacing: 0.15em;
+  margin-bottom: 24rpx;
+}
+
+/* 描述 */
+.modal-desc {
+  display: block;
+  font-size: 26rpx;
+  color: rgba(51, 51, 51, 0.7);
+  text-align: center;
+  line-height: 1.8;
+  letter-spacing: 0.05em;
+  margin-bottom: 60rpx;
+}
+
+/* 按钮组 */
+.modal-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 28rpx;
+}
+
+.modal-btn {
+  position: relative;
+  height: 108rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16rpx;
+  border-radius: 20rpx;
+  transition: all 0.3s;
+}
+
+/* 主按钮（暗金色） */
+.modal-btn--primary {
+  background: linear-gradient(135deg, #B23A34 0%, #D4AF37 100%);
+  border: none;
+  box-shadow: 0 12rpx 32rpx rgba(178, 58, 52, 0.35);
+}
+
+.modal-btn--primary .btn-icon,
+.modal-btn--primary .btn-text {
+  color: #fff;
+}
+
+/* 次级按钮（霜白色） */
+.modal-btn--secondary {
+  background: rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.08);
+}
+
+.modal-btn--secondary .btn-icon,
+.modal-btn--secondary .btn-text {
+  color: rgba(51, 51, 51, 0.7);
+}
+
+.btn-hover {
+  opacity: 0.8;
+  transform: scale(0.98);
+}
+
+.btn-icon {
+  font-size: 32rpx;
+  font-weight: 200;
+}
+
+.btn-text {
+  font-size: 28rpx;
+  letter-spacing: 0.1em;
+  font-weight: 300;
+}
+
+.btn-hint {
+  font-size: 20rpx;
+  color: rgba(51, 51, 51, 0.4);
+  margin-left: 8rpx;
+}
+
+/* 关闭按钮 */
+.modal-close {
+  position: absolute;
+  top: 24rpx;
+  right: 24rpx;
+  width: 56rpx;
+  height: 56rpx;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.05);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(51, 51, 51, 0.5);
+  font-size: 32rpx;
+  transition: all 0.2s;
+}
+
+.modal-close:active {
+  background: rgba(0, 0, 0, 0.1);
+  transform: scale(0.9);
 }
 </style>

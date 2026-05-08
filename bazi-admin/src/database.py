@@ -65,16 +65,42 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 async def init_db():
     """
     初始化数据库
-    创建所有表
+    创建所有表，并确保 Mock 用户存在
     """
     from src.models.base import Base
     # 导入所有模型以确保它们被注册
     from src.models import User, Archive, Record
+    from sqlalchemy import select, text
     
     async with engine.begin() as conn:
         # 创建所有表
         await conn.run_sync(Base.metadata.create_all)
         print("✅ 数据库表创建成功")
+
+    # 确保 Mock 用户存在（外键约束要求 users 表中必须有此记录）
+    MOCK_USER_ID = "00000000-0000-0000-0000-000000000001"
+    async with AsyncSessionLocal() as session:
+        try:
+            result = await session.execute(
+                select(User).where(User.user_id == MOCK_USER_ID)
+            )
+            existing = result.scalar_one_or_none()
+            if existing is None:
+                mock_user = User(
+                    user_id=MOCK_USER_ID,
+                    nickname="默认用户",
+                    phone=None,
+                    wechat_unionid=None,
+                    avatar_url=None,
+                )
+                session.add(mock_user)
+                await session.commit()
+                print(f"✅ Mock 用户已创建: {MOCK_USER_ID}")
+            else:
+                print(f"ℹ️ Mock 用户已存在: {MOCK_USER_ID}")
+        except Exception as e:
+            await session.rollback()
+            print(f"⚠️ Mock 用户创建失败（可能已存在）: {e}")
 
 
 async def close_db():

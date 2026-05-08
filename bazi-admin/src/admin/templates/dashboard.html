@@ -1,0 +1,330 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- 页面标题 -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="h3 mb-3">
+                <i class="fas fa-chart-line me-2"></i>运营大屏
+            </h1>
+            <p class="text-muted">实时监控平台核心数据指标</p>
+        </div>
+    </div>
+
+    <!-- 数据卡片区 -->
+    <div class="row mb-4">
+        <!-- 今日用户 -->
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-primary shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                今日新增用户
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="todayUsers">
+                                <span class="spinner-border spinner-border-sm" role="status"></span>
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-users fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 今日测算 -->
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-success shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                今日测算次数
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="todayRecords">
+                                <span class="spinner-border spinner-border-sm" role="status"></span>
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-calculator fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- AI 消耗 -->
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-info shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                今日 AI 调用
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="todayAiCalls">
+                                <span class="spinner-border spinner-border-sm" role="status"></span>
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-robot fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 活跃档案 -->
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-warning shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                活跃档案数
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="activeArchives">
+                                <span class="spinner-border spinner-border-sm" role="status"></span>
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-folder-open fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 图表区 -->
+    <div class="row">
+        <!-- 用户增长趋势 -->
+        <div class="col-xl-8 col-lg-7 mb-4">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-chart-area me-2"></i>近 7 日用户增长趋势
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <canvas id="userGrowthChart" style="height: 300px;"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- 测算类型分布 -->
+        <div class="col-xl-4 col-lg-5 mb-4">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-chart-pie me-2"></i>测算类型分布
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <canvas id="recordTypeChart" style="height: 300px;"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 最近活动 -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-history me-2"></i>最近测算记录
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-bordered" id="recentRecordsTable">
+                            <thead>
+                                <tr>
+                                    <th>时间</th>
+                                    <th>用户</th>
+                                    <th>八字</th>
+                                    <th>类型</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td colspan="4" class="text-center">
+                                        <span class="spinner-border spinner-border-sm" role="status"></span>
+                                        加载中...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 引入 Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+<style>
+    .border-left-primary {
+        border-left: 0.25rem solid #4e73df !important;
+    }
+    .border-left-success {
+        border-left: 0.25rem solid #1cc88a !important;
+    }
+    .border-left-info {
+        border-left: 0.25rem solid #36b9cc !important;
+    }
+    .border-left-warning {
+        border-left: 0.25rem solid #f6c23e !important;
+    }
+    .text-primary {
+        color: #4e73df !important;
+    }
+    .text-success {
+        color: #1cc88a !important;
+    }
+    .text-info {
+        color: #36b9cc !important;
+    }
+    .text-warning {
+        color: #f6c23e !important;
+    }
+    .text-gray-800 {
+        color: #5a5c69 !important;
+    }
+    .text-gray-300 {
+        color: #dddfeb !important;
+    }
+</style>
+
+<script>
+// 模拟数据加载
+document.addEventListener('DOMContentLoaded', function() {
+    // 模拟加载数据卡片
+    setTimeout(() => {
+        document.getElementById('todayUsers').textContent = Math.floor(Math.random() * 50 + 10);
+        document.getElementById('todayRecords').textContent = Math.floor(Math.random() * 200 + 50);
+        document.getElementById('todayAiCalls').textContent = Math.floor(Math.random() * 150 + 30);
+        document.getElementById('activeArchives').textContent = Math.floor(Math.random() * 100 + 20);
+    }, 500);
+
+    // 用户增长趋势图
+    const userGrowthCtx = document.getElementById('userGrowthChart').getContext('2d');
+    const userGrowthChart = new Chart(userGrowthCtx, {
+        type: 'line',
+        data: {
+            labels: ['7天前', '6天前', '5天前', '4天前', '3天前', '2天前', '昨天'],
+            datasets: [{
+                label: '新增用户',
+                data: [
+                    Math.floor(Math.random() * 30 + 10),
+                    Math.floor(Math.random() * 30 + 10),
+                    Math.floor(Math.random() * 30 + 10),
+                    Math.floor(Math.random() * 30 + 10),
+                    Math.floor(Math.random() * 30 + 10),
+                    Math.floor(Math.random() * 30 + 10),
+                    Math.floor(Math.random() * 30 + 10)
+                ],
+                borderColor: '#4e73df',
+                backgroundColor: 'rgba(78, 115, 223, 0.1)',
+                tension: 0.3,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top'
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        stepSize: 10
+                    }
+                }
+            }
+        }
+    });
+
+    // 测算类型分布饼图
+    const recordTypeCtx = document.getElementById('recordTypeChart').getContext('2d');
+    const recordTypeChart = new Chart(recordTypeCtx, {
+        type: 'doughnut',
+        data: {
+            labels: ['基础测算', '精批分析', '流年运势', '合婚配对'],
+            datasets: [{
+                data: [
+                    Math.floor(Math.random() * 100 + 50),
+                    Math.floor(Math.random() * 80 + 30),
+                    Math.floor(Math.random() * 60 + 20),
+                    Math.floor(Math.random() * 40 + 10)
+                ],
+                backgroundColor: [
+                    '#4e73df',
+                    '#1cc88a',
+                    '#36b9cc',
+                    '#f6c23e'
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'bottom'
+                }
+            }
+        }
+    });
+
+    // 模拟最近记录
+    setTimeout(() => {
+        const tbody = document.querySelector('#recentRecordsTable tbody');
+        tbody.innerHTML = `
+            <tr>
+                <td>2026-05-07 14:32:15</td>
+                <td>用户_${Math.floor(Math.random() * 1000)}</td>
+                <td>甲子 乙丑 丙寅 丁卯</td>
+                <td><span class="badge bg-success">👑 精批</span></td>
+            </tr>
+            <tr>
+                <td>2026-05-07 14:28:43</td>
+                <td>用户_${Math.floor(Math.random() * 1000)}</td>
+                <td>戊辰 己巳 庚午 辛未</td>
+                <td><span class="badge bg-secondary">基础</span></td>
+            </tr>
+            <tr>
+                <td>2026-05-07 14:15:22</td>
+                <td>用户_${Math.floor(Math.random() * 1000)}</td>
+                <td>壬申 癸酉 甲戌 乙亥</td>
+                <td><span class="badge bg-success">👑 精批</span></td>
+            </tr>
+            <tr>
+                <td>2026-05-07 14:02:11</td>
+                <td>用户_${Math.floor(Math.random() * 1000)}</td>
+                <td>丙子 丁丑 戊寅 己卯</td>
+                <td><span class="badge bg-secondary">基础</span></td>
+            </tr>
+            <tr>
+                <td>2026-05-07 13:55:08</td>
+                <td>用户_${Math.floor(Math.random() * 1000)}</td>
+                <td>庚辰 辛巳 壬午 癸未</td>
+                <td><span class="badge bg-success">👑 精批</span></td>
+            </tr>
+        `;
+    }, 800);
+});
+</script>
+{% endblock %}

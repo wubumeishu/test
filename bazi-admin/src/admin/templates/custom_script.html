@@ -1,0 +1,45 @@
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    const dict = {
+        "New": "新增", 
+        "Export": "导出", 
+        "Edit": "编辑", 
+        "Delete": "删除",
+        "Details": "详情", 
+        "Save": "保存", 
+        "Save and continue editing": "保存并继续编辑",
+        "Save and add another": "保存并新增", 
+        "Cancel": "取消", 
+        "Search": "搜索",
+        "Reset": "重置", 
+        "Go Back": "返回", 
+        "Close": "关闭", 
+        "Yes": "确定",
+        "No": "取消", 
+        "Actions": "操作", 
+        "Items per page": "每页显示",
+        "Previous": "上一页", 
+        "Next": "下一页", 
+        "No records found": "暂无相关数据",
+        "Are you sure you want to delete this?": "您确定要删除此条记录吗？"
+    };
+
+    // 扩大狩猎范围，覆盖列表、新增、编辑页的所有核心元素
+    const selectors = '.btn, .nav-link-title, th, label, .pagination a, .card-title, .text-muted, h4';
+    
+    document.querySelectorAll(selectors).forEach(el => {
+        el.childNodes.forEach(node => {
+            if (node.nodeType === 3) {
+                let text = node.nodeValue.trim();
+                if (dict[text]) {
+                    node.nodeValue = node.nodeValue.replace(text, dict[text]);
+                }
+            }
+        });
+    });
+
+    // 单独处理搜索框的 placeholder
+    const searchInput = document.querySelector('input[placeholder="Search"]');
+    if (searchInput) searchInput.placeholder = "输入关键字搜索...";
+});
+</script>

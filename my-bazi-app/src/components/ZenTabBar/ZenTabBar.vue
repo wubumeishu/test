@@ -18,8 +18,8 @@
       </view>
 
       <view class="tab-item" :class="{ active: current === 3 }" @click="switchTab('/pages/zen/zen')">
-        <text class="material-symbols-outlined tab-icon">self_improvement</text>
-        <text class="tab-text">禅修</text>
+        <text class="material-symbols-outlined tab-icon">explore</text>
+        <text class="tab-text">发现</text>
       </view>
 
       <view class="tab-item" :class="{ active: current === 4 }" @click="switchTab('/pages/mine/mine')">
@@ -33,8 +33,15 @@
 <script setup lang="ts">
 import { defineProps, onMounted } from 'vue'
 
+// 配置组件选项：关闭样式隔离，允许父组件样式穿透
+defineOptions({
+  options: {
+    styleIsolation: 'shared'
+  }
+})
+
 const props = defineProps({
-  // 当前高亮的索引 (0:首页, 1:解惑, 3:禅修, 4:我的)
+  // 当前高亮的索引 (0:首页, 1:解惑, 3:发现, 4:我的)
   // 注意：索引 2 被中心按钮占据
   current: {
     type: Number,
@@ -87,8 +94,7 @@ const onCenterClick = () => {
 </script>
 
 <style scoped>
-/* 引入材质图标 (如果全局已引入可删除此行) */
-@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,200,0,0&display=swap');
+/* 页面样式 - Material Symbols 图标字体已在 App.vue 全局定义 */
 
 /* 底部安全区与悬浮定位 */
 .tabbar-wrapper {

@@ -11,6 +11,13 @@
 <script setup lang="ts">
 import { computed, defineProps } from 'vue'
 
+// 配置组件选项：关闭样式隔离，允许父组件样式穿透
+defineOptions({
+  options: {
+    styleIsolation: 'shared'
+  }
+})
+
 // 定义 Props
 interface Props {
   padding?: string

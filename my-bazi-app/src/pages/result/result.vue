@@ -68,7 +68,11 @@
             
             <!-- 十神 -->
             <view class="cell shishen-cell" :class="{ 'day-master-label': pillar.isDayMaster }">
-              <text class="shishen-text" :class="{ 'highlight': pillar.isDayMaster }">
+              <text 
+                class="shishen-text" 
+                :class="{ 'highlight': pillar.isDayMaster }"
+                @tap="handleTermClick(pillar.shishen)"
+              >
                 {{ pillar.shishen }}
               </text>
             </view>
@@ -108,7 +112,10 @@
                   >
                     {{ cg }}
                   </text>
-                  <text class="cg-ss">
+                  <text 
+                    class="cg-ss"
+                    @tap="handleTermClick(pillar.canggan_shishen[cgIndex])"
+                  >
                     {{ pillar.canggan_shishen[cgIndex] || '-' }}
                   </text>
                 </view>
@@ -125,7 +132,12 @@
             
             <!-- 纳音 -->
             <view class="cell nayin-cell">
-              <text class="nayin-text">{{ pillar.nayin }}</text>
+              <text 
+                class="nayin-text"
+                @tap="handleTermClick(pillar.nayin)"
+              >
+                {{ pillar.nayin }}
+              </text>
             </view>
             
             <!-- 神煞 -->
@@ -136,6 +148,7 @@
                     v-for="(ss, ssIndex) in pillar.shensha" 
                     :key="'ss' + ssIndex" 
                     class="ss-tag"
+                    @click="showShenshaDetail(ss)"
                   >
                     {{ ss }}
                   </text>
@@ -190,15 +203,40 @@
         </view>
       </view>
 
-      <!-- AI 分析报告 (如果有) -->
-      <view v-if="baziStore.currentBaziData.ai_report" class="ai-report glass-card">
-        <view class="section-title">
-          <text class="title-text">深度解析</text>
+      <!-- AI 分析报告 - 每篇独立卡片 -->
+      <template v-if="baziStore.currentBaziData.ai_report || isStreaming || streamText">
+
+        <!-- 流式加载中：顶部状态提示 -->
+        <view v-if="isStreaming" class="stream-status-bar">
+          <view class="stream-dot"></view>
+          <text class="stream-status-text">AI 正在洞察命盘，文字将逐步呈现...</text>
         </view>
-        <view class="ai-content">
-          <text class="ai-text">{{ baziStore.currentBaziData.ai_report }}</text>
+
+        <!-- 错误提示 -->
+        <view v-if="streamError" class="stream-error-bar">
+          <text class="stream-error-text">{{ streamError }}</text>
         </view>
-      </view>
+
+        <!-- 篇章卡片 -->
+        <view
+          v-for="(section, index) in parsedAiSections"
+          :key="index"
+          class="ai-section-card glass-card"
+        >
+          <view class="ai-section-header">
+            <view class="ai-section-line"></view>
+            <rich-text :nodes="section.title" class="ai-section-title-text"></rich-text>
+          </view>
+          <rich-text :nodes="section.content" class="ai-rich-text"></rich-text>
+        </view>
+
+        <!-- 流式进行中：末尾光标 -->
+        <view v-if="isStreaming && parsedAiSections.length === 0" class="stream-placeholder glass-card">
+          <text class="stream-placeholder-text">{{ streamText || '正在连接 AI...' }}</text>
+          <view class="stream-cursor"></view>
+        </view>
+
+      </template>
 
       <!-- 底部留白 -->
       <view class="bottom-spacer"></view>
@@ -215,15 +253,45 @@
         </button>
       </view>
     </view>
+
+    <!-- 自定义知识弹窗 -->
+    <view v-if="showPopup" class="popup-mask" @tap="showPopup = false" @touchmove.stop.prevent>
+      <view class="popup-content">
+        <view class="popup-title">{{ popupTitle }}</view>
+        <scroll-view class="popup-body" scroll-y>
+          <text class="popup-text">{{ popupContent }}</text>
+        </scroll-view>
+      </view>
+    </view>
   </view>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
+import { onLoad } from '@dcloudio/uni-app'
 import { useBaziStore } from '@/store/useBaziStore'
+import { useUserStore } from '@/store/useUserStore'
 
 // Store
 const baziStore = useBaziStore()
+const userStore = useUserStore()
+
+// ── 流式 AI 状态 ──────────────────────────────────────────────────────────────
+const streamText    = ref('')       // 流式累积的文本
+const isStreaming   = ref(false)    // 是否正在流式接收
+const streamDone    = ref(false)    // 是否已完成
+const streamError   = ref('')       // 错误信息
+
+// 最终展示的 AI 报告：流式完成前用 streamText，完成后用 store 中的数据
+const aiReportText = computed(() => {
+  if (streamText.value) return streamText.value
+  return baziStore.currentBaziData?.ai_report || ''
+})
+
+// 弹窗状态
+const showPopup = ref(false)
+const popupTitle = ref('')
+const popupContent = ref('')
 
 // 命主姓名：优先取 baseInfo（排盘时已同步），兜底 currentBaziData.name，再兜底「未知」
 const displayName = computed(() => {
@@ -381,7 +449,7 @@ const wuxingList = computed(() => {
   ]
 })
 
-// 页面加载时隐藏 TabBar
+// 页面加载时隐藏 TabBar，并判断是否需要发起流式请求
 onMounted(() => {
   uni.hideTabBar({
     animation: false,
@@ -390,14 +458,298 @@ onMounted(() => {
   })
 })
 
+// 接收页面参数，判断是否启动流式 AI
+onLoad((options: any) => {
+  const needStream = options?.stream === '1'
+  const recordId = options?.record_id || baziStore.currentBaziData?.record_id
+
+  if (needStream && recordId) {
+    startAiStream(recordId)
+  }
+})
+
+/**
+ * 发起流式 AI 请求（微信小程序用 enableChunked）
+ */
+function startAiStream(recordId: string) {
+  const token = uni.getStorageSync('token')
+  const baseURL = import.meta.env.VITE_API_BASE_URL || 'https://api.aiyuechuan.cn'
+
+  isStreaming.value = true
+  streamText.value = ''
+  streamDone.value = false
+  streamError.value = ''
+
+  console.log('🌊 [结果页] 开始流式 AI 请求，record_id:', recordId)
+
+  let buffer = ''  // 用于处理跨 chunk 的不完整 SSE 行
+
+  const requestTask = wx.request({
+    url: `${baseURL}/api/ai/stream/${recordId}`,
+    method: 'GET',
+    header: {
+      'Authorization': `Bearer ${token}`,
+      'Accept': 'text/event-stream',
+    },
+    enableChunked: true,  // 关键：开启分块接收
+    success: () => {
+      console.log('✅ [结果页] 流式请求连接成功')
+    },
+    fail: (err: any) => {
+      console.error('❌ [结果页] 流式请求失败:', err)
+      isStreaming.value = false
+      streamError.value = '连接失败，请重试'
+    }
+  })
+
+  // 监听分块数据
+  requestTask.onChunkReceived((res: any) => {
+    try {
+      // ArrayBuffer → string
+      const decoder = new TextDecoder('utf-8')
+      const chunk = decoder.decode(res.data)
+      buffer += chunk
+
+      // 按 \n\n 分割 SSE 事件
+      const events = buffer.split('\n\n')
+      buffer = events.pop() || ''  // 最后一个可能不完整，留到下次
+
+      for (const event of events) {
+        const line = event.trim()
+        if (!line.startsWith('data: ')) continue
+
+        const jsonStr = line.slice(6)  // 去掉 "data: "
+        try {
+          const data = JSON.parse(jsonStr)
+
+          if (data.text) {
+            streamText.value += data.text
+          }
+
+          if (data.done) {
+            isStreaming.value = false
+            streamDone.value = true
+            console.log(`✅ [结果页] 流式完成，总字数: ${data.total}，缓存: ${data.cached || false}`)
+            // 同步到 store
+            if (baziStore.currentBaziData) {
+              baziStore.currentBaziData.ai_report = streamText.value
+            }
+          }
+
+          if (data.error) {
+            isStreaming.value = false
+            streamError.value = data.error
+            console.error('❌ [结果页] 流式错误:', data.error)
+          }
+        } catch (e) {
+          // JSON 解析失败，忽略
+        }
+      }
+    } catch (e) {
+      console.error('❌ [结果页] chunk 解析失败:', e)
+    }
+  })
+}
+
 // 返回上一页（兼容从历史记录或排盘准备页进入的场景）
-function goBack() {
+const goBack = () => {
   uni.navigateBack()
 }
+
+// 显示神煞详情弹窗
+const showShenshaDetail = (shenshaName: string) => {
+  // 神煞解释字典
+  const shenshaDict: Record<string, string> = {
+    '将星': '将星主权威、领导才能，命带将星者多有统御之能，适合从事管理、军警等职业。',
+    '天德贵人': '天德贵人为大吉之神，主逢凶化吉、遇难呈祥，一生多得贵人相助。',
+    '月德贵人': '月德贵人主福德深厚，性格温和，处事圆融，易得长辈提携。',
+    '天乙贵人': '天乙贵人为最吉之神，主聪明智慧，遇事多有贵人相助，逢凶化吉。',
+    '文昌贵人': '文昌主聪明好学，利于学业、考试，适合从事文化、教育、科研等工作。',
+    '太极贵人': '太极者，物极而生。主命主悟性极高，直觉敏锐，与玄学、哲学、心理学有极其深厚的缘分。做事有始有终，遇难往往能冥冥中逢凶化吉。',
+    '天厨贵人': '天上之厨，主食禄丰厚。命中带天厨者，一生不愁吃穿，多有口福。适宜在公职、行政、餐饮或农业领域发展，主一生生活平稳安逸。',
+    '驿马': '驿马主奔波、变动，命带驿马者多走动，适合外出发展、经商、旅游等。',
+    '桃花': '桃花主人缘、异性缘，命带桃花者多有魅力，但需注意感情纷扰。',
+    '红艳': '红艳主异性缘佳，容貌姣好，但需注意感情问题，避免桃色纠纷。',
+    '华盖': '华盖主艺术、宗教、玄学天赋，性格孤高，喜欢独处思考。',
+    '金舆': '金舆主富贵、享受，命带金舆者多有物质福报，生活安逸。',
+    '天厨': '天厨主衣食无忧，善于烹饪美食，注重生活品质。',
+    '劫煞': '劫煞主波折、破财，需注意防范意外、官非、破财等事。',
+    '灾煞': '灾煞主疾病、灾祸，需注意身体健康，防范意外伤害。',
+    '孤辰': '孤辰主孤独、独立，性格内向，不善交际，但独立性强。',
+    '寡宿': '寡宿主孤独、寡合，婚姻感情易有波折，需注意经营感情。',
+    '亡神': '亡神主消耗、损失，需注意防范破财、失物等事。',
+    '羊刃': '羊刃主刚强、果断，但易冲动、暴躁，需注意控制情绪。',
+    '飞刃': '飞刃主意外、伤灾，需注意安全，防范意外伤害。',
+    '空亡': '空亡主虚空、不实，做事易虎头蛇尾，需注意脚踏实地。',
+    '咸池': '咸池主桃花、异性缘，但需注意感情纷扰，避免桃色纠纷。',
+    '红鸾': '主喜庆、浪漫与正缘桃花。命中带红鸾者，往往面容姣好、极具亲和力，一生容易遇到良缘，婚姻多主幸福美满。',
+    '天喜': '主开心、消除灾厄。与红鸾星相呼应，逢之能化解忧愁，常有意外之喜，所谓"一喜挡三灾"，是极好的清明之星。',
+    '魁罡': '主刚烈、掌权、不信邪。带魁罡者性格极为坚毅，有大将之风，能逢凶化吉。但脾气往往较硬，需注意刚直易折，宜修柔和之气。',
+    '童子': '传说中仙童转世。主第六感强、极具灵气、长相年轻。但也暗示心思细腻敏感，早年易有体弱或情路羁绊，需多亲近禅修、顺其自然。',
+    '阴阳差错': '主男女感情、婚姻多有波折或时机不巧。逢此煞者，易在感情中遇到"错的时间遇到对的人"或沟通频道不一致的状况。晚婚、或与伴侣保持一定独立空间可有效化解。'
+  }
+  
+  const description = shenshaDict[shenshaName] || '暂无详细解释'
+  
+  popupTitle.value = shenshaName
+  popupContent.value = description
+  showPopup.value = true
+}
+
+// ==================== Markdown 解析器 ====================
+
+/**
+ * 将 AI 返回的 Markdown 按 ### 切分为独立篇章数组
+ * 每个元素：{ title: string(HTML), content: string(HTML) }
+ */
+const parsedAiSections = computed(() => {
+  const raw = aiReportText.value
+  if (!raw) return []
+
+  // 按 ### 切分，保留标题行
+  const blocks = raw.split(/(?=###\s)/).filter(b => b.trim())
+
+  return blocks.map(block => {
+    const lines = block.split('\n')
+    const titleLine = lines[0].replace(/^###\s*/, '').trim()
+    const bodyLines = lines.slice(1).join('\n').trim()
+
+    // 标题 HTML
+    const titleHtml = `<span style="font-size:30rpx;font-weight:600;color:#8B4513;letter-spacing:4rpx;">${titleLine}</span>`
+
+    // 正文处理
+    let body = bodyLines
+
+    // ## 标题
+    body = body.replace(/##\s+(.+)/g,
+      '<h2 style="font-size:32rpx;font-weight:600;color:#C0392B;letter-spacing:5rpx;margin:32rpx 0 12rpx;padding-bottom:10rpx;border-bottom:1px solid rgba(192,57,43,0.15);">$1</h2>'
+    )
+
+    // **粗体**
+    body = body.replace(/\*\*(.+?)\*\*/g,
+      '<strong style="font-weight:700;color:#B8860B;background:rgba(184,134,11,0.08);padding:0 6rpx;border-radius:4rpx;">$1</strong>'
+    )
+
+    // 双换行 → 段落
+    body = body.split('\n\n').map(para => {
+      const t = para.trim()
+      if (!t) return ''
+      if (t.startsWith('<h')) return t
+      return `<p style="font-size:28rpx;color:#1A1A1A;line-height:1.9;letter-spacing:2rpx;text-align:justify;text-indent:2em;padding:20rpx 0;margin:0;border-bottom:0.5px solid rgba(0,0,0,0.06);">${t}</p>`
+    }).filter(Boolean).join('')
+
+    // 单换行 → <br>
+    body = body.replace(/(?<!>)\n(?!<)/g, '<br/>')
+
+    return { title: titleHtml, content: body }
+  })
+})
+
+// 小知识百科弹窗
+const handleTermClick = (term: string) => {
+  // 过滤无效点击
+  if (!term || term === '-' || term === '日主') return
+  
+  // 完整的术语字典
+  const termDict: Record<string, string> = {
+    // 核心概念
+    "主星": "【含义】指八字天干透出的十神。\n【解析】代表一个人展现给外界的社会形象、外在性格以及显性的吉凶事件。",
+    "副星": "【含义】指八字地支藏干所对应的十神。\n【解析】代表一个人的内在性格、潜意识、家庭内部关系以及隐蔽的特质。",
+    "自坐": "【含义】指日干下方的日支。\n【解析】如庚午，即庚金自坐午火。代表命主的内心世界，同时也代表配偶宫的状态。",
+    "纳音": "【含义】古人将六十甲子与五音十二律结合衍生的特殊五行。\n【解析】如'海中金'、'炉中火'。纳音多用于补充分析个人的气质特征、性格底色以及两人八字的合婚参考。",
+    
+    // 十神百科
+    "正官": "【十神】克我且阴阳异性。\n【解析】主威严、自律、贵人、法律与秩序。女命代表正式的丈夫，男命代表事业与女儿。",
+    "七杀": "【十神】克我且阴阳同性（又称偏官）。\n【解析】主魄力、野心、压力、果断甚至叛逆。女命也代表情人或非传统姻缘，男命代表儿子。",
+    "正印": "【十神】生我且阴阳异性。\n【解析】主仁慈、学业、名誉、涵养与长辈缘。代表母亲、文书与庇护之神。",
+    "偏印": "【十神】生我且阴阳同性（极凶时称枭神）。\n【解析】主领悟力、玄学天赋、孤独感与偏门艺术。代表继母、非正规学历或特殊技能。",
+    "正财": "【十神】我克且阴阳异性。\n【解析】主正当收入、勤俭节约、踏实肯干。男命代表正式的妻子。",
+    "偏财": "【十神】我克且阴阳同性。\n【解析】主意外之财、交际能力、慷慨与投资理财。男命代表父亲或红颜知己。",
+    "食神": "【十神】我生且阴阳同性。\n【解析】主福气、享受、温和、艺术才华与美食。女命代表女儿。",
+    "伤官": "【十神】我生且阴阳异性。\n【解析】主才华横溢、傲气、打破常规与创新。女命代表儿子，同时伤官克官，女命逢之感情易起波澜。",
+    "比肩": "【十神】与我同五行同阴阳。\n【解析】主自我意志、独立、平辈朋友与合作。过旺则易生争执与固执。",
+    "劫财": "【十神】与我同五行异阴阳。\n【解析】主竞争、掠夺、爆发力与人际交往。过旺易破财或冲动。",
+    
+    // 神煞百科
+    "天乙贵人": "【神煞·极吉】\n【解析】八字最尊贵之神。主聪明智慧，人缘极佳，遇事能逢凶化吉，一生多有贵人提携帮扶。",
+    "文昌贵人": "【神煞·吉】\n【解析】主才华出众，气质文雅。命中带文昌，利于读书考学，逢考运佳，适合从事文化、学术、教育工作。",
+    "天德贵人": "【神煞·吉】\n【解析】乃天地德秀之气，主心性仁慈，做事公道，能化解诸多灾厄。",
+    "月德贵人": "【神煞·吉】\n【解析】犹如月亮之光辉，主逢凶化吉，福分深厚，多得女性长辈或贵人相助。",
+    "羊刃": "【神煞·双刃剑】\n【解析】五行极旺之星。性情刚烈，坚毅果敢。身弱逢之为帮身利器，身旺逢之则易暴躁冲动，利武职（公检法、军人、外科医生等）。",
+    "禄神": "【神煞·吉】\n【解析】代表食禄、福气与财富。命中带禄，主一生衣食无忧，身体健康，能安享福分。",
+    "驿马": "【神煞·中性】\n【解析】主动荡、变迁、奔波。带驿马者多离乡发展、出国或从事交通、物流、销售等需频繁走动的行业。",
+    "桃花": "【神煞·中性】\n【解析】主风流倜傥、异性缘佳、有艺术或审美天赋。适宜从事演艺、公关、美业等，但也需防感情纠纷。",
+    "华盖": "【神煞·中性】\n【解析】古代帝王车驾之伞盖。主孤高不群，聪颖绝伦。多与佛道玄学有缘，耐得住寂寞，适合深耕专业技能或艺术创作。",
+    "将星": "【神煞·吉】\n【解析】主威权、领导力与组织统御能力。命中带将星，易在职场或官场中掌握实权，成为团队核心。",
+    "孤辰": "【神煞·偏凶】\n【解析】主性格孤僻，不善交际，男命逢之易妨克妻子或异性缘薄。",
+    "寡宿": "【神煞·偏凶】\n【解析】主内心孤独，清心寡欲，女命逢之易妨克丈夫或感情难聚易散。",
+    
+    // 神煞补充
+    "阴阳差错": "【神煞·偏凶】\n【解析】主男女感情、婚姻多有波折或时机不巧。逢此煞者，易在感情中遇到'错的时间遇到对的人'或沟通频道不一致的状况。晚婚、或与伴侣保持一定独立空间可有效化解。",
+    "太极贵人": "【神煞·吉】\n【解析】太极者，物极而生。主命主悟性极高，直觉敏锐，与玄学、哲学、心理学有极其深厚的缘分。做事有始有终，遇难往往能冥冥中逢凶化吉。",
+    "天厨贵人": "【神煞·吉】\n【解析】天上之厨，主食禄丰厚。命中带天厨者，一生不愁吃穿，多有口福。适宜在公职、行政、餐饮或农业领域发展，主一生生活平稳安逸。",
+    "劫煞": "【神煞·双刃剑】\n【解析】为五行绝处。主突发性的波折、变故或竞争。但劫煞若为喜用神，则主其人决断力极强，聪明敏捷，能在动荡中果断抓住机遇，险中求胜。",
+    
+    // 宫位与特殊名词补充
+    "正宫": "【宫位】八字中常指代'夫妻宫'（即日柱的地支）。\n【解析】代表一个人真实的婚姻状态、家庭内部环境以及最终伴侣的特质。若吉星（如正官、正财）安稳落在正宫，主婚姻美满稳定、得良缘。",
+    
+    // ================= 宫位与基础概念 =================
+    "日元": "【概念·核心】又称'日干'。\n【解析】代表您自己的'本我'与核心灵魂。整个八字命盘的吉凶、强弱，都是以日元为中心来推演的。",
+    "年柱": "【宫位·根基】代表 1-16 岁（早年运势）。\n【解析】代表祖辈余荫、原生家庭背景以及一个人最早期的成长环境。",
+    "月柱": "【宫位·枝干】代表 17-32 岁（青年运势）。\n【解析】代表父母、兄弟姐妹以及人生最重要的性格'基本盘'与青年时期的发展土壤。",
+    "日支": "【宫位·花朵】代表 33-48 岁（中年运势），即'夫妻宫'。\n【解析】代表您最隐秘的内心世界，以及婚姻伴侣的特质和两人相处的模式。",
+    "时柱": "【宫位·果实】代表 49 岁以后（晚年运势），即'子女宫'。\n【解析】代表晚年生活状态、对下属及子女的影响力，也暗示着人生最终的归宿与隐藏潜能。",
+    
+    // ================= 常见纳音五行 =================
+    "海中金": "【纳音·金】\n【解析】如深海沉金，光芒内敛。主性格深藏不露，有极强的潜力和城府。不鸣则已，一鸣惊人，但也需伯乐（火）来发掘锻炼。",
+    "炉中火": "【纳音·火】\n【解析】如炉膛之火，热情奔放且持久。主性格积极、有感染力，但也容易急躁。一生需有'木'相生（如多读书、沉淀心性）方能保持长盛不衰。",
+    "大林木": "【纳音·木】\n【解析】枝繁叶茂，生生不息。主为人仁慈、包容力强、有担当。多能在团队中成为庇护他人的大树，适合从政、教育或管理岗位。",
+    "路旁土": "【纳音·土】\n【解析】广袤平坦，承载万物。主性格踏实稳重、有极强的忍耐力和服务精神。不与人争锋，但却是不可或缺的基石型人才。",
+    "剑锋金": "【纳音·金】\n【解析】百炼成钢，锋芒毕露。主刚毅果决，执行力极强。适合从事专业技术、公检法、外科医疗等需要'锐气'与纪律的行业。",
+    "涧下水": "【纳音·水】\n【解析】山间清泉，柔和清澈。主为人聪慧灵动，善于变通，做事如润物细无声。虽不似大江大河般波澜壮阔，但极具生活情趣与艺术灵感。",
+    "杨柳木": "【纳音·木】\n【解析】如杨柳般柔顺婉转，随风飘摇。主性格柔和、善于交际与变通。极具韧性，但内心易有随波逐流的迷茫感，需有坚实的依靠（如土、水）方能成材。",
+    "天河水": "【纳音·水】\n【解析】天上之水，沛然清高，能润泽万物。主气度不凡，心胸宽广，乐于施舍与助人。天河水不惧土克（土在地上，水在天上），思想境界往往较高，格局清奇。",
+    "山头火": "【纳音·火】\n【解析】如山顶烽火，光芒远照。主性格开朗、有领导气质，能照亮他人。但需注意高处不胜寒，宜保持谦逊。",
+    "屋上土": "【纳音·土】\n【解析】如屋顶之土，遮风挡雨。主为人稳重、有责任感，能为家庭和团队提供庇护。",
+    "霹雳火": "【纳音·火】\n【解析】如雷电之火，瞬间爆发。主性格急躁、行动力强，能在短时间内完成大事，但需注意持久力。",
+    "松柏木": "【纳音·木】\n【解析】如松柏常青，坚韧不拔。主性格坚毅、有原则，能经受风霜考验，晚年运势尤佳。",
+    "长流水": "【纳音·水】\n【解析】如江河长流，源远流长。主智慧深远、做事有恒心，能持续发展，一生财运稳定。",
+    "沙中金": "【纳音·金】\n【解析】如沙中淘金，需要磨砺。主早年辛苦，但经过努力能成大器，中晚年运势转好。",
+    "山下火": "【纳音·火】\n【解析】如山脚之火，温暖平和。主性格温和、有亲和力，能温暖身边的人，适合服务行业。",
+    "平地木": "【纳音·木】\n【解析】如平原树木，根基稳固。主性格务实、脚踏实地，能稳步发展，事业根基扎实。",
+    "壁上土": "【纳音·土】\n【解析】如墙壁之土，坚固可靠。主为人忠诚、有担当，能成为他人依靠，适合建筑、房地产行业。",
+    "金箔金": "【纳音·金】\n【解析】如金箔薄片，华丽精致。主外表光鲜、注重形象，有艺术天赋，但需注意内在修养。",
+    "覆灯火": "【纳音·火】\n【解析】如灯笼之火，照亮一方。主性格细腻、善于照顾他人，能在小范围内发挥影响力。",
+    "天上火": "【纳音·火】\n【解析】如太阳之火，光芒万丈。主性格豪爽、有领袖气质，能成就大事业，但需注意不可过于刚烈。",
+    "石榴木": "【纳音·木】\n【解析】如石榴多子，繁荣昌盛。主子女运佳、家庭和睦，晚年享福，适合从事教育或家族事业。",
+    "大海水": "【纳音·水】\n【解析】如大海浩瀚，包容万物。主心胸宽广、格局大，能成就大事业，但需注意情绪波动。",
+    "钗钏金": "【纳音·金】\n【解析】如首饰之金，精致美丽。主注重品味、有审美能力，适合艺术、设计、珠宝等行业。",
+    "桑柘木": "【纳音·木】\n【解析】如桑树养蚕，默默奉献。主为人勤劳、善于培养他人，适合教育、培训等行业。",
+    "大驿土": "【纳音·土】\n【解析】如驿站之土，四通八达。主善于交际、人脉广阔，适合从事贸易、物流等需要沟通的行业。",
+    "泉中水": "【纳音·水】\n【解析】如泉水清澈，源源不断。主智慧清明、思维敏捷，能持续创新，适合研发、咨询等行业。",
+    "白蜡金": "【纳音·金】\n【解析】如蜡烛之金，柔中带刚。主性格温和但有原则，能在柔和中坚持自我，适合调解、协调工作。",
+    "城头土": "【纳音·土】\n【解析】如城墙之土，坚固防御。主有保护意识、责任心强，能守护家庭和事业，适合安保、管理工作。",
+    
+    // ================= 进阶神煞补充 =================
+    "红鸾": "【神煞·吉】\n【解析】主喜庆、浪漫与正缘桃花。命中带红鸾者，往往面容姣好、极具亲和力，一生容易遇到良缘，婚姻多主幸福美满。",
+    "天喜": "【神煞·吉】\n【解析】主开心、消除灾厄。与红鸾星相呼应，逢之能化解忧愁，常有意外之喜，所谓'一喜挡三灾'，是极好的清明之星。",
+    "空亡": "【神煞·中性】\n【解析】并非绝对的'没有'或'凶兆'，而是指物质维度的'放空'。带空亡者往往淡泊名利，对精神维度、哲学、玄学有极高领悟力，是修心修行之良材。",
+    "魁罡": "【神煞·特殊】\n【解析】主刚烈、掌权、不信邪。带魁罡者性格极为坚毅，有大将之风，能逢凶化吉。但脾气往往较硬，需注意刚直易折，宜修柔和之气。",
+    "金舆": "【神煞·吉】\n【解析】古代贵族的'金色马车'。主物质生活丰裕，出入有豪车相伴。命中带金舆，多能得到伴侣或家族的得力助益，生活安逸。",
+    "童子": "【神煞·中性】\n【解析】传说中仙童转世。主第六感强、极具灵气、长相年轻。但也暗示心思细腻敏感，早年易有体弱或情路羁绊，需多亲近禅修、顺其自然。"
+  }
+  
+  const description = termDict[term] || '暂无详细解释'
+  
+  popupTitle.value = term
+  popupContent.value = description
+  showPopup.value = true
+}
+
 </script>
 
 <style scoped>
-@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@300;400;500;600;700;900&display=swap');
+/* 页面样式 - Material Symbols 图标字体已在 App.vue 全局定义 */
 
 /* ==================== 全局变量 ==================== */
 .page-container {
@@ -518,7 +870,7 @@ function goBack() {
   display: flex;
   align-items: center;
   margin-bottom: 30rpx;
-  padding: 20rpx 0;
+  padding: 80rpx 0 20rpx;
 }
 
 .back-button {
@@ -815,6 +1167,14 @@ function goBack() {
   border-radius: 6rpx;
   line-height: 1.2;
   white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.ss-tag:active {
+  background-color: rgba(178, 58, 52, 0.1);
+  color: #B23A34;
+  transform: scale(0.95);
 }
 
 .ss-empty {
@@ -947,11 +1307,107 @@ function goBack() {
   border-radius: 16rpx;
 }
 
+/* 每篇独立卡片 */
+.ai-section-card {
+  padding: 40rpx 36rpx 20rpx;
+  margin-bottom: 24rpx;
+  border-radius: 16rpx;
+}
+
+/* 篇标题区域 */
+.ai-section-header {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  margin-bottom: 24rpx;
+  padding-bottom: 20rpx;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+/* 标题左侧竖线装饰 */
+.ai-section-line {
+  width: 6rpx;
+  height: 36rpx;
+  background: linear-gradient(180deg, #D4AF37 0%, #B8860B 100%);
+  border-radius: 3rpx;
+  flex-shrink: 0;
+}
+
+.ai-section-title-text {
+  flex: 1;
+}
+
 .ai-content {
-  padding: 30rpx;
-  background: rgba(0, 0, 0, 0.02);
+  padding: 0 10rpx;
+  background: rgba(0, 0, 0, 0.01);
   border-left: 4rpx solid #C0392B;
   border-radius: 8rpx;
+}
+
+/* rich-text 容器 */
+.ai-rich-text {
+  width: 100%;
+}
+
+/* ==================== Markdown 禅意排版 ==================== */
+
+/* 主标题 (# 标题) */
+.zen-main-title {
+  font-family: 'Noto Serif SC', serif;
+  font-size: 40rpx;
+  font-weight: 700;
+  color: #1A1A1A;
+  text-align: center;
+  letter-spacing: 8rpx;
+  margin: 40rpx 0 30rpx;
+  padding-bottom: 20rpx;
+  border-bottom: 1px solid rgba(192, 57, 43, 0.2);
+}
+
+/* 章节标题 (## 标题) */
+.zen-chapter-title {
+  font-family: 'Noto Serif SC', serif;
+  font-size: 36rpx;
+  font-weight: 600;
+  color: #C0392B;
+  letter-spacing: 6rpx;
+  margin: 50rpx 0 30rpx;
+  padding-bottom: 16rpx;
+  border-bottom: 0.5px solid rgba(192, 57, 43, 0.15);
+}
+
+/* 小节标题 (### 标题) */
+.zen-section-title {
+  font-family: 'Noto Serif SC', serif;
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #8B4513;
+  letter-spacing: 4rpx;
+  margin: 40rpx 0 24rpx;
+  padding-left: 20rpx;
+  border-left: 4rpx solid #D4C4A8;
+}
+
+/* 段落 */
+.zen-paragraph {
+  font-size: 28rpx;
+  color: #1A1A1A;
+  line-height: 1.8;
+  letter-spacing: 2rpx;
+  margin-bottom: 0;
+  padding: 28rpx 0;
+  text-align: justify;
+  text-indent: 2em;
+  border-bottom: 0.5px solid rgba(0, 0, 0, 0.06);
+}
+
+/* 重点高亮 (**文字**) */
+.zen-highlight {
+  font-weight: 700;
+  color: #B8860B;
+  background: rgba(184, 134, 11, 0.08);
+  padding: 0 8rpx;
+  border-radius: 4rpx;
 }
 
 .ai-text {
@@ -1017,8 +1473,137 @@ function goBack() {
   letter-spacing: 6rpx;
 }
 
-/* 底部留白 */
-.bottom-spacer {
-  height: 80rpx;
+/* ── 底部留白 ── */
+.bottom-spacer { height: 80rpx; }
+
+/* ── 流式状态 ── */
+.stream-status-bar {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  padding: 20rpx 30rpx;
+  margin-bottom: 16rpx;
+  background: rgba(212, 175, 55, 0.06);
+  border-radius: 12rpx;
+  border: 1px solid rgba(212, 175, 55, 0.15);
+}
+
+.stream-dot {
+  width: 16rpx;
+  height: 16rpx;
+  border-radius: 50%;
+  background: #D4AF37;
+  flex-shrink: 0;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.8); }
+}
+
+.stream-status-text {
+  font-size: 24rpx;
+  color: #B8860B;
+  letter-spacing: 1rpx;
+}
+
+.stream-error-bar {
+  padding: 20rpx 30rpx;
+  margin-bottom: 16rpx;
+  background: rgba(178, 58, 52, 0.06);
+  border-radius: 12rpx;
+  border: 1px solid rgba(178, 58, 52, 0.15);
+}
+
+.stream-error-text {
+  font-size: 24rpx;
+  color: #B23A34;
+}
+
+/* 流式进行中的占位卡片 */
+.stream-placeholder {
+  padding: 40rpx 36rpx;
+  margin-bottom: 24rpx;
+  border-radius: 16rpx;
+  min-height: 200rpx;
+}
+
+.stream-placeholder-text {
+  font-size: 28rpx;
+  color: #333;
+  line-height: 1.9;
+  letter-spacing: 1rpx;
+  white-space: pre-wrap;
+}
+
+/* 打字机光标 */
+.stream-cursor {
+  display: inline-block;
+  width: 3rpx;
+  height: 32rpx;
+  background: #B23A34;
+  margin-left: 4rpx;
+  vertical-align: middle;
+  animation: blink 0.8s step-end infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+/* ==================== 自定义知识弹窗 ==================== */
+.popup-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(15, 15, 15, 0.55); /* 更深邃的背景，突出弹窗 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 60rpx;
+}
+
+.popup-content {
+  width: 100%;
+  max-width: 600rpx;
+  max-height: 70vh;
+  background: rgba(255, 255, 255, 0.18); /* 提升霜白色浓度 */
+  backdrop-filter: blur(40px);
+  -webkit-backdrop-filter: blur(40px);
+  border: 1px solid rgba(255, 255, 255, 0.25); /* 提亮边框增加边界感 */
+  border-radius: 24rpx;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.popup-title {
+  padding: 40rpx 40rpx 24rpx;
+  font-size: 36rpx;
+  font-weight: 600;
+  color: #FFFFFF;
+  text-align: center;
+  letter-spacing: 0.1em;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.popup-body {
+  flex: 1;
+  padding: 32rpx 40rpx 40rpx;
+  overflow-y: auto;
+}
+
+.popup-text {
+  font-size: 28rpx;
+  line-height: 1.8;
+  color: #EAEAEA;
+  white-space: pre-wrap;
+  letter-spacing: 0.05em;
 }
 </style>

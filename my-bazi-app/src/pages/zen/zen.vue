@@ -49,13 +49,12 @@ import ZenTabBar from '@/components/ZenTabBar/ZenTabBar.vue'
 </script>
 
 <style scoped>
-@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,200,0,0&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;700&display=swap');
+/* 页面样式 - Material Symbols 图标字体已在 App.vue 全局定义 */
 
 .page-container {
   min-height: 100vh;
   background-color: #F9F6F1;
-  background-image: url("https://www.transparenttextures.com/patterns/handmade-paper.png");
+  background-image: url("/static/handmade-paper.png");
 }
 
 .main-content {

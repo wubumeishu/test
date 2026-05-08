@@ -155,10 +155,12 @@ export const useBaziStore = defineStore('bazi', () => {
       console.log('📤 [useBaziStore] 请求参数:', requestData)
 
       // 调用后端 API
+      // AI 深度分析需要更长的超时时间（60 秒）
       const response = await request<BaziCalculateResponse>({
         url: '/api/fortune/calculate',
         method: 'POST',
-        data: requestData
+        data: requestData,
+        timeout: isDeepAnalysis ? 60000 : 10000  // AI 分析 60 秒，普通排盘 10 秒
       })
 
       console.log('📥 [useBaziStore] 后端响应:', response)
@@ -248,10 +250,12 @@ export const useBaziStore = defineStore('bazi', () => {
       console.log('📤 [useBaziStore] 请求参数:', data)
 
       // 调用后端 API
+      // AI 深度分析需要更长的超时时间（60 秒）
       const response = await request<BaziCalculateResponse>({
         url: '/api/fortune/calculate-by-data',
         method: 'POST',
-        data: data
+        data: data,
+        timeout: data.is_deep_analysis ? 60000 : 10000  // AI 分析 60 秒，普通排盘 10 秒
       })
 
       console.log('📥 [useBaziStore] 后端响应:', response)

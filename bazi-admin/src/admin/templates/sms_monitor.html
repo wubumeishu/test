@@ -1,0 +1,169 @@
+{% extends "sqladmin/layout.html" %}
+
+{% block content %}
+<div class="col-12">
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h3 class="card-title">📱 虚拟短信接码台 (开发环境专用)</h3>
+            <button onclick="window.location.reload();" class="btn btn-primary btn-sm shadow-sm">
+                <i class="fa-solid fa-arrows-rotate me-2"></i> 刷新数据
+            </button>
+        </div>
+        
+        <div class="card-body border-bottom py-3 bg-light">
+            <p class="text-muted mb-0">
+                <i class="fa-solid fa-circle-info text-blue me-1"></i>
+                说明：App 端请求获取验证码后，验证码会被拦截并显示在此处。<strong>点击验证码块即可自动复制</strong>。
+            </p>
+        </div>
+        
+        <div class="table-responsive">
+            <table class="table card-table table-vcenter text-nowrap datatable table-hover">
+                <thead>
+                    <tr>
+                        <th class="w-1">#</th>
+                        <th>接收手机号</th>
+                        <th>验证码 (点击复制)</th>
+                        <th>剩余有效时间</th>
+                        <th>当前状态</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in codes %}
+                    <tr>
+                        <td><span class="text-muted">{{ loop.index }}</span></td>
+                        <td>
+                            <div class="d-flex align-items-center">
+                                <span class="avatar avatar-sm bg-blue-lt me-2"><i class="fa-solid fa-phone"></i></span>
+                                <span class="text-body fw-bold">{{ item.phone }}</span>
+                            </div>
+                        </td>
+                        <td>
+                            <span class="badge bg-green text-green-fg fs-3 py-2 px-3 shadow-sm code-badge" 
+                                  style="letter-spacing: 3px; cursor: pointer; user-select: all; transition: all 0.2s;" 
+                                  onclick="copyToClipboard('{{ item.code }}', this)"
+                                  title="点击一键复制">
+                                <i class="fa-regular fa-copy me-1 opacity-50"></i> {{ item.code }}
+                            </span>
+                        </td>
+                        <td>
+                            <div class="d-flex align-items-center">
+                                <i class="fa-regular fa-clock text-muted me-2"></i>
+                                <span class="fw-bold countdown-text" data-ttl="{{ item.ttl }}">
+                                    {{ item.ttl }} 秒
+                                </span>
+                            </div>
+                        </td>
+                        <td>
+                            <span class="status status-green status-badge">
+                                <span class="status-dot status-dot-animated"></span> 有效
+                            </span>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="5" class="text-center py-5">
+                            <div class="empty">
+                                <div class="empty-icon">
+                                    <i class="fa-solid fa-inbox fa-3x text-muted opacity-25"></i>
+                                </div>
+                                <p class="empty-title">暂无活跃验证码</p>
+                                <p class="empty-subtitle text-muted">
+                                    请在前端 App 中触发发送验证码后，点击右上角刷新。
+                                </p>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- 1. 丝滑复制功能 ---
+    function copyToClipboard(text, el) {
+        navigator.clipboard.writeText(text).then(function() {
+            // 按钮按压视觉反馈
+            let originalBg = el.className;
+            el.className = originalBg.replace('bg-green', 'bg-teal');
+            setTimeout(() => el.className = originalBg, 200);
+
+            // 悬浮提示窗
+            let toast = document.createElement("div");
+            toast.innerHTML = `<div class="d-flex align-items-center"><i class="fa-solid fa-circle-check fs-2 me-3"></i> <div><div class="fw-bold">复制成功</div><div class="opacity-75" style="font-size:12px;">验证码 ${text} 已存入剪贴板</div></div></div>`;
+            toast.style.cssText = "position:fixed; top:20px; right:50%; transform:translateX(50%); background:#2fb344; color:white; padding:12px 24px; border-radius:8px; box-shadow: 0 10px 25px rgba(47, 179, 68, 0.3); z-index:9999; transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55); opacity:0; top:0px;";
+            document.body.appendChild(toast);
+            
+            // 弹入动画
+            setTimeout(() => { toast.style.opacity = "1"; toast.style.top = "20px"; }, 10);
+            
+            // 弹出动画与销毁
+            setTimeout(() => {
+                toast.style.opacity = "0";
+                toast.style.top = "0px";
+                setTimeout(() => toast.remove(), 300);
+            }, 2500);
+        }).catch(function(err) {
+            alert("复制失败，请手动框选复制。");
+        });
+    }
+
+    // --- 2. 动态倒计时逻辑 ---
+    document.addEventListener("DOMContentLoaded", function() {
+        // 获取所有需要倒计时的元素
+        const countdownElements = document.querySelectorAll('.countdown-text');
+        
+        countdownElements.forEach(el => {
+            // 获取初始剩余秒数
+            let secondsLeft = parseInt(el.getAttribute('data-ttl'), 10);
+            
+            // 找到同一行对应的状态标签和验证码标签
+            const row = el.closest('tr');
+            const statusBadge = row.querySelector('.status-badge');
+            const codeBadge = row.querySelector('.code-badge');
+
+            // 如果一开始就过期了（以防万一）
+            if (secondsLeft <= 0) {
+                markAsExpired(el, statusBadge, codeBadge);
+                return;
+            }
+
+            // 启动定时器，每 1000 毫秒 (1秒) 执行一次
+            const timer = setInterval(() => {
+                secondsLeft--;
+                
+                if (secondsLeft > 0) {
+                    // 格式化时间显示 (例如 02:45)
+                    const minutes = Math.floor(secondsLeft / 60);
+                    const seconds = secondsLeft % 60;
+                    const formattedTime = minutes > 0 
+                        ? `${minutes} 分 ${seconds.toString().padStart(2, '0')} 秒` 
+                        : `<span class="${seconds < 10 ? 'text-danger' : 'text-warning'}">${seconds} 秒</span>`; // 最后10秒标红警告
+                    
+                    el.innerHTML = formattedTime;
+                } else {
+                    // 倒计时结束
+                    clearInterval(timer);
+                    markAsExpired(el, statusBadge, codeBadge);
+                }
+            }, 1000);
+        });
+
+        // 验证码过期的视觉处理函数
+        function markAsExpired(timeEl, statusEl, codeEl) {
+            timeEl.innerHTML = '<span class="text-danger fw-bold">已过期</span>';
+            // 状态改为红色
+            statusEl.className = 'status status-red';
+            statusEl.innerHTML = '已失效';
+            // 验证码变灰并禁止点击
+            codeEl.className = 'badge bg-secondary text-secondary-fg fs-3 py-2 px-3';
+            codeEl.style.textDecoration = 'line-through';
+            codeEl.style.cursor = 'not-allowed';
+            codeEl.title = '验证码已过期';
+            codeEl.onclick = null; // 移除点击复制事件
+        }
+    });
+</script>
+{% endblock %}

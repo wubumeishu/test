@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from src.database import get_db
-from src.models import Archive, Record
+from src.models import Archive, Record, User
 from src.schemas.bazi import (
     BaziCalculateRequest,
     BaziCalculateByDataRequest,
@@ -17,21 +17,10 @@ from src.schemas.bazi import (
     WuxingStrengthResponse,
 )
 from src.services.bazi_engine import calculate_full_bazi, BaziResult
+from src.api.deps import get_current_user
 from uuid import uuid4
 
 router = APIRouter(prefix="/api/fortune", tags=["八字排盘"])
-
-
-# 临时模拟用户ID (后续接入登录后替换)
-MOCK_USER_ID = "00000000-0000-0000-0000-000000000001"
-
-
-async def get_current_user_id() -> str:
-    """
-    获取当前用户ID
-    TODO: 后续接入登录系统后，从 JWT Token 中解析用户ID
-    """
-    return MOCK_USER_ID
 
 
 def convert_bazi_result_to_response(
@@ -120,7 +109,7 @@ def convert_bazi_result_to_response(
 async def calculate_bazi(
     request: BaziCalculateRequest,
     db: AsyncSession = Depends(get_db),
-    user_id: str = Depends(get_current_user_id)
+    current_user: User = Depends(get_current_user)
 ):
     """
     八字排盘接口 (通过档案ID)
@@ -131,26 +120,32 @@ async def calculate_bazi(
     3. 将计算结果存入 records 表
     4. 返回精简的排盘数据供前端展示
     
+    **数据隔离**: 只能查询和排盘当前登录用户的档案
+    
     Args:
         request: 排盘请求，包含档案ID
         db: 数据库会话
-        user_id: 当前用户ID
+        current_user: 当前登录用户
         
     Returns:
         八字排盘结果
     """
     try:
-        print(f"🔄 [fortune] 开始排盘，档案ID: {request.archive_id}")
+        user_id = current_user.user_id
+        print(f"🔄 [fortune] 开始排盘，档案ID: {request.archive_id}, 用户: {user_id}")
         
-        # 1. 查询档案信息
-        stmt = select(Archive).where(Archive.archive_id == request.archive_id)
+        # 1. 查询档案信息（强制带上 user_id 条件）
+        stmt = select(Archive).where(
+            Archive.archive_id == request.archive_id,
+            Archive.user_id == user_id  # 数据隔离：只能查询自己的档案
+        )
         result = await db.execute(stmt)
         archive = result.scalar_one_or_none()
         
         # 判空逻辑：如果查不到档案，返回 404
         if archive is None:
-            print(f"❌ [fortune] 档案不存在: {request.archive_id}")
-            raise HTTPException(status_code=404, detail="未找到该档案")
+            print(f"❌ [fortune] 档案不存在或无权访问: {request.archive_id}")
+            raise HTTPException(status_code=404, detail="未找到该档案或无权访问")
         
         print(f"✅ [fortune] 找到档案: {archive.name}, 性别: {archive.gender}")
         print(f"📅 [fortune] 出生日期: {archive.birth_year}-{archive.birth_month}-{archive.birth_day} {archive.birth_hour}:{archive.birth_minute}")
@@ -274,18 +269,16 @@ async def calculate_bazi(
                 detail=f"数据序列化失败: {str(e)}"
             )
 
-        # 6. AI 报告（如果需要深度分析）
-        ai_report = None
-        if request.is_deep_analysis:
-            ai_report = "AI 深度分析报告 (待接入大模型)"
-            print(f"📝 [fortune] 深度分析已启用")
+        # 6. AI 报告（如果需要深度分析，异步后台处理，不阻塞返回）
+        # 流式模式：先快速返回排盘结果，AI 内容通过 /api/ai/stream/{record_id} 接口获取
+        ai_report = None  # 不在此处调用 AI，由前端单独请求流式接口
         
-        # 7. 存入数据库
+        # 7. 存入数据库（强制写入当前用户的 ID）
         try:
             print(f"💾 [fortune] 开始存入数据库...")
             new_record = Record(
                 record_id=record_id,
-                user_id=user_id,
+                user_id=user_id,  # 数据隔离：强制写入当前用户 ID
                 archive_id=request.archive_id,
                 bazi_str=bazi_result.bazi_string,
                 five_elements_json=five_elements_json,
@@ -295,7 +288,7 @@ async def calculate_bazi(
             db.add(new_record)
             await db.commit()
             await db.refresh(new_record)
-            print(f"✅ [fortune] 数据库存储成功，记录ID: {record_id}")
+            print(f"✅ [fortune] 数据库存储成功，记录ID: {record_id}, 用户: {user_id}")
         except Exception as e:
             print(f"❌ [fortune] 数据库存储失败: {e}")
             await db.rollback()
@@ -334,7 +327,7 @@ async def calculate_bazi(
 async def calculate_bazi_by_data(
     request: BaziCalculateByDataRequest,
     db: AsyncSession = Depends(get_db),
-    user_id: str = Depends(get_current_user_id)
+    current_user: User = Depends(get_current_user)
 ):
     """
     八字排盘接口 (通过原始数据)
@@ -347,16 +340,19 @@ async def calculate_bazi_by_data(
     
     注意: 此接口用于临时计算，不会创建档案
     
+    **数据隔离**: 记录归属于当前登录用户
+    
     Args:
         request: 排盘请求，包含生辰数据
         db: 数据库会话
-        user_id: 当前用户ID
+        current_user: 当前登录用户
         
     Returns:
         八字排盘结果
     """
     try:
-        print(f"🔄 [fortune] 开始快速排盘，姓名: {request.name or '未知'}")
+        user_id = current_user.user_id
+        print(f"🔄 [fortune] 开始快速排盘，姓名: {request.name or '未知'}, 用户: {user_id}")
         print(f"📅 [fortune] 出生日期: {request.birth_year}-{request.birth_month}-{request.birth_day} {request.birth_hour}:{request.birth_minute}")
         
         # 1. 字段类型转换（确保所有参数都是 int 类型）
@@ -468,11 +464,8 @@ async def calculate_bazi_by_data(
                 detail=f"数据序列化失败: {str(e)}"
             )
         
-        # 4. AI 报告（如果需要深度分析）
+        # 4. AI 报告（流式模式：不在此处调用 AI，由前端单独请求流式接口）
         ai_report = None
-        if request.is_deep_analysis:
-            ai_report = "AI 深度分析报告 (待接入大模型)"
-            print(f"📝 [fortune] 深度分析已启用")
         
         # 5. 返回精简的排盘数据（快速排盘不存入数据库）
         response = convert_bazi_result_to_response(
@@ -505,27 +498,32 @@ async def get_records(
     limit: int = 20,
     offset: int = 0,
     db: AsyncSession = Depends(get_db),
-    user_id: str = Depends(get_current_user_id)
+    current_user: User = Depends(get_current_user)
 ):
     """
     获取测算记录列表
+    
+    **数据隔离**: 只返回当前登录用户的记录
     
     Args:
         archive_id: 档案ID (可选，用于筛选)
         limit: 每页数量
         offset: 偏移量
         db: 数据库会话
-        user_id: 当前用户ID
+        current_user: 当前登录用户
         
     Returns:
         测算记录列表
     """
     try:
+        user_id = current_user.user_id
+        
         # 构建查询（join Archive 表以获取命主姓名）
+        # 强制带上 user_id 条件，只查询当前用户的记录
         stmt = (
             select(Record, Archive.name.label("archive_name"))
             .join(Archive, Record.archive_id == Archive.archive_id, isouter=True)
-            .where(Record.user_id == user_id)
+            .where(Record.user_id == user_id)  # 数据隔离：只查询自己的记录
         )
         
         if archive_id:
@@ -537,7 +535,7 @@ async def get_records(
         result = await db.execute(stmt)
         rows = result.all()
         
-        # 统计总数
+        # 统计总数（强制带上 user_id 条件）
         count_stmt = select(Record).where(Record.user_id == user_id)
         if archive_id:
             count_stmt = count_stmt.where(Record.archive_id == archive_id)
@@ -564,6 +562,8 @@ async def get_records(
             }
             record_responses.append(RecordResponse.model_validate(record_dict))
         
+        print(f"✅ [fortune] 查询记录列表，用户 {user_id} 共有 {total} 条记录")
+        
         return RecordListResponse(
             success=True,
             message="获取记录成功",
@@ -572,6 +572,7 @@ async def get_records(
         )
         
     except Exception as e:
+        print(f"❌ [fortune] 查询记录列表失败: {e}")
         raise HTTPException(
             status_code=500,
             detail=f"获取记录失败: {str(e)}"
@@ -582,35 +583,43 @@ async def get_records(
 async def get_record(
     record_id: str,
     db: AsyncSession = Depends(get_db),
-    user_id: str = Depends(get_current_user_id)
+    current_user: User = Depends(get_current_user)
 ):
     """
     获取单个测算记录详情
     
+    **数据隔离**: 只能查询当前登录用户的记录
+    
     Args:
         record_id: 记录ID
         db: 数据库会话
-        user_id: 当前用户ID
+        current_user: 当前登录用户
         
     Returns:
         测算记录详情
     """
     try:
+        user_id = current_user.user_id
+        
+        # 强制带上 user_id 条件，只查询当前用户的记录
         stmt = select(Record).where(
             Record.record_id == record_id,
-            Record.user_id == user_id
+            Record.user_id == user_id  # 数据隔离：只能查询自己的记录
         )
         result = await db.execute(stmt)
         record = result.scalar_one_or_none()
         
         if record is None:
-            raise HTTPException(status_code=404, detail="记录不存在")
+            raise HTTPException(status_code=404, detail="记录不存在或无权访问")
+        
+        print(f"✅ [fortune] 查询记录详情: {record_id} (用户: {user_id})")
         
         return RecordResponse.model_validate(record)
         
     except HTTPException:
         raise
     except Exception as e:
+        print(f"❌ [fortune] 查询记录详情失败: {e}")
         raise HTTPException(
             status_code=500,
             detail=f"获取记录失败: {str(e)}"
@@ -621,32 +630,39 @@ async def get_record(
 async def delete_record(
     record_id: str,
     db: AsyncSession = Depends(get_db),
-    user_id: str = Depends(get_current_user_id)
+    current_user: User = Depends(get_current_user)
 ):
     """
     删除测算记录
     
+    **数据隔离**: 只能删除当前登录用户的记录
+    
     Args:
         record_id: 记录ID
         db: 数据库会话
-        user_id: 当前用户ID
+        current_user: 当前登录用户
         
     Returns:
         删除结果
     """
     try:
+        user_id = current_user.user_id
+        
+        # 强制带上 user_id 条件，只能删除当前用户的记录
         stmt = select(Record).where(
             Record.record_id == record_id,
-            Record.user_id == user_id
+            Record.user_id == user_id  # 数据隔离：只能删除自己的记录
         )
         result = await db.execute(stmt)
         record = result.scalar_one_or_none()
         
         if record is None:
-            raise HTTPException(status_code=404, detail="记录不存在")
+            raise HTTPException(status_code=404, detail="记录不存在或无权访问")
         
         await db.delete(record)
         await db.commit()
+        
+        print(f"✅ [fortune] 删除记录成功: {record_id} (用户: {user_id})")
         
         return {
             "success": True,
@@ -658,6 +674,7 @@ async def delete_record(
         raise
     except Exception as e:
         await db.rollback()
+        print(f"❌ [fortune] 删除记录失败: {e}")
         raise HTTPException(
             status_code=500,
             detail=f"删除记录失败: {str(e)}"
