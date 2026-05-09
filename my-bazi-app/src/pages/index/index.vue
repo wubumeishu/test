@@ -2,153 +2,189 @@
   <view class="page-container">
     <ZenHeader title="每日运势" :show-menu="true" @menu="handleMenu" />
 
-    <main class="main-scroll">
-      <section class="top-card-section">
-        <ZenCard class="top-banner">
-          <view class="banner-container">
-            <view class="banner-left">
-              <view class="ink-bg">
-                <text class="material-symbols-outlined ink-icon">nights_stay</text>
-              </view>
+    <!-- 内容区：position relative，让 overlay absolute 定位生效 -->
+    <view class="content-area">
 
-              <view class="banner-info">
-                <view class="info-top">
-                  <view v-if="isSolarTerm">
-                    <text class="tag-text">二十四节气 · 第{{ solarTermIndex }}</text>
-                    <text class="date-text">{{ displayLunarDate }} · 公历 {{ displaySolarDate }}</text>
+      <!-- ══ 无档案：引导模式 ══ -->
+      <template v-if="hasNoArchive">
+
+        <!-- 引导遮罩（absolute，不遮 TabBar） -->
+        <InitialGuideOverlay
+          :visible="showGuideOverlay"
+          @start="handleGuideStart"
+          @dismiss="handleGuideOverlayDismiss"
+        />
+
+        <!-- 遮罩关闭后展示的内容：日历卡片 + 禅签 -->
+        <main class="main-scroll">
+          <section class="top-card-section">
+            <ZenCard class="top-banner">
+              <view class="banner-container">
+                <view class="banner-left">
+                  <view class="ink-bg">
+                    <text class="material-symbols-outlined ink-icon">nights_stay</text>
                   </view>
-                  <view v-else>
-                    <text class="tag-text">月影禅心 · {{ yueXiangText }}</text>
-                    <text class="date-text">{{ displayLunarDate }} · {{ displayWeekDay }}</text>
+                  <view class="banner-info">
+                    <view class="info-top">
+                      <view v-if="isSolarTerm">
+                        <text class="tag-text">二十四节气 · 第{{ solarTermIndex }}</text>
+                        <text class="date-text">{{ displayLunarDate }} · 公历 {{ displaySolarDate }}</text>
+                      </view>
+                      <view v-else>
+                        <text class="tag-text">月影禅心 · {{ yueXiangText }}</text>
+                        <text class="date-text">{{ displayLunarDate }} · {{ displayWeekDay }}</text>
+                      </view>
+                    </view>
+                    <view class="quote-area">
+                      <text class="quote-text">{{ currentShortQuote }}</text>
+                    </view>
                   </view>
                 </view>
-
-                <view class="quote-area">
-                  <text class="quote-text">{{ currentShortQuote }}</text>
+                <view class="banner-right">
+                  <text class="writing-vertical brush-font">{{ solarChineseDateDisplay }}</text>
                 </view>
               </view>
-            </view>
+            </ZenCard>
+          </section>
 
-            <view class="banner-right">
-              <text class="writing-vertical brush-font">{{ solarChineseDateDisplay }}</text>
-            </view>
-          </view>
-        </ZenCard>
-      </section>
+          <!-- 每日禅签 -->
+          <section class="zen-lot-section">
+            <DailyZenLot @goCreate="handleGuideStart" />
+          </section>
+        </main>
 
-      <section class="fortune-index-section">
-        <view class="brush-circle">
-          <!-- 使用双半圆实现进度圆环 -->
-          <view class="ring-wrapper">
-            <view class="ring-bg"></view>
-            <view class="ring-progress-wrapper">
-              <view class="ring-left" :style="{ transform: (fortuneScore ?? 0) >= 50 ? 'rotate(180deg)' : `rotate(${((fortuneScore ?? 0) / 50) * 180}deg)` }"></view>
-              <view class="ring-right" :style="{ transform: (fortuneScore ?? 0) >= 50 ? `rotate(${(((fortuneScore ?? 0) - 50) / 50) * 180}deg)` : 'rotate(0deg)' }"></view>
-            </view>
-          </view>
-          <view class="score-box">
-            <text class="score-num brush-font" :class="{ 'score-empty': fortuneScore === null }">
-              {{ fortuneScore !== null ? fortuneScore : '--' }}
-            </text>
-            <text class="score-label">{{ fortuneScore !== null ? '今日运势指数' : '录入生辰后解锁' }}</text>
-          </view>
-        </view>
+      </template>
 
-        <!-- 干支日期：分段渲染，间隔点单独着色 -->
-        <view class="calendar-info">
-          <view class="ganzhi-row">
-            <text class="ganzhi-seg">{{ displayBaziParts[0] }}</text>
-            <text class="ganzhi-dot">·</text>
-            <text class="ganzhi-seg">{{ displayBaziParts[1] }}</text>
-            <text class="ganzhi-dot">·</text>
-            <text class="ganzhi-seg">{{ displayBaziParts[2] }}</text>
-          </view>
-          <view class="gold-divider"></view>
-          <text class="advice-text">{{ currentLongQuote }}</text>
-        </view>
-      </section>
+      <!-- ══ 有档案：正常运势模式 ══ -->
+      <template v-else>
+        <main class="main-scroll">
+          <section class="top-card-section">
+            <ZenCard class="top-banner">
+              <view class="banner-container">
+                <view class="banner-left">
+                  <view class="ink-bg">
+                    <text class="material-symbols-outlined ink-icon">nights_stay</text>
+                  </view>
+                  <view class="banner-info">
+                    <view class="info-top">
+                      <view v-if="isSolarTerm">
+                        <text class="tag-text">二十四节气 · 第{{ solarTermIndex }}</text>
+                        <text class="date-text">{{ displayLunarDate }} · 公历 {{ displaySolarDate }}</text>
+                      </view>
+                      <view v-else>
+                        <text class="tag-text">月影禅心 · {{ yueXiangText }}</text>
+                        <text class="date-text">{{ displayLunarDate }} · {{ displayWeekDay }}</text>
+                      </view>
+                    </view>
+                    <view class="quote-area">
+                      <text class="quote-text">{{ currentShortQuote }}</text>
+                    </view>
+                  </view>
+                </view>
+                <view class="banner-right">
+                  <text class="writing-vertical brush-font">{{ solarChineseDateDisplay }}</text>
+                </view>
+              </view>
+            </ZenCard>
+          </section>
 
-      <section class="grid-section">
-        <view class="fortune-grid">
-          <ZenCard class="grid-item" v-for="item in fortuneDimensions" :key="item.label">
-            <view class="grid-content">
-              <text class="material-symbols-outlined grid-icon">{{ item.icon }}</text>
-              <text class="grid-label">{{ item.label }}</text>
-              <view class="dots-row">
-                <view
-                  class="dot"
-                  v-for="i in 5"
-                  :key="i"
-                  :class="{ active: i <= item.level }"
-                ></view>
+          <section class="fortune-index-section">
+            <view class="brush-circle">
+              <view class="ring-wrapper">
+                <view class="ring-bg"></view>
+                <view class="ring-progress-wrapper">
+                  <view class="ring-left" :style="{ transform: (fortuneScore ?? 0) >= 50 ? 'rotate(180deg)' : `rotate(${((fortuneScore ?? 0) / 50) * 180}deg)` }"></view>
+                  <view class="ring-right" :style="{ transform: (fortuneScore ?? 0) >= 50 ? `rotate(${(((fortuneScore ?? 0) - 50) / 50) * 180}deg)` : 'rotate(0deg)' }"></view>
+                </view>
+              </view>
+              <view class="score-box">
+                <text class="score-num brush-font" :class="{ 'score-empty': fortuneScore === null }">
+                  {{ fortuneScore !== null ? fortuneScore : '--' }}
+                </text>
+                <text class="score-label">{{ fortuneScore !== null ? '今日运势指数' : '录入生辰后解锁' }}</text>
               </view>
             </view>
-          </ZenCard>
-        </view>
-      </section>
+            <view class="calendar-info">
+              <view class="ganzhi-row">
+                <text class="ganzhi-seg">{{ displayBaziParts[0] }}</text>
+                <text class="ganzhi-dot">·</text>
+                <text class="ganzhi-seg">{{ displayBaziParts[1] }}</text>
+                <text class="ganzhi-dot">·</text>
+                <text class="ganzhi-seg">{{ displayBaziParts[2] }}</text>
+              </view>
+              <view class="gold-divider"></view>
+              <text class="advice-text">{{ currentLongQuote }}</text>
+            </view>
+          </section>
 
-      <section class="almanac-section">
-        <ZenCard padding="0" class="almanac-card">
-          <view class="almanac-header">
-            <text class="almanac-en">Traditional Calendar</text>
-            <text class="almanac-lunar">{{ lunarMonthDay }} · {{ yueXiangText }}</text>
-          </view>
-          <view class="almanac-body">
-            <view class="almanac-col">
-              <text class="col-tag col-tag--yi">宜</text>
-              <view class="col-content">
-                <text
-                  v-for="item in dayYiList"
-                  :key="item"
-                  class="luck-text"
-                >{{ item }}</text>
-                <text v-if="dayYiList.length === 0" class="luck-text luck-text--empty">—</text>
-              </view>
+          <section class="grid-section">
+            <view class="fortune-grid">
+              <ZenCard class="grid-item" v-for="item in fortuneDimensions" :key="item.label">
+                <view class="grid-content">
+                  <text class="material-symbols-outlined grid-icon">{{ item.icon }}</text>
+                  <text class="grid-label">{{ item.label }}</text>
+                  <view class="dots-row">
+                    <view
+                      class="dot"
+                      v-for="i in 5"
+                      :key="i"
+                      :class="{ active: i <= item.level }"
+                    ></view>
+                  </view>
+                </view>
+              </ZenCard>
             </view>
-            <view class="almanac-col">
-              <text class="col-tag col-tag--ji">忌</text>
-              <view class="col-content">
-                <text
-                  v-for="item in dayJiList"
-                  :key="item"
-                  class="unluck-text"
-                >{{ item }}</text>
-                <text v-if="dayJiList.length === 0" class="unluck-text unluck-text--empty">—</text>
-              </view>
-            </view>
-          </view>
-        </ZenCard>
-      </section>
+          </section>
 
-      <section class="cta-section">
-        <ZenCard class="cta-card">
-          <view class="cta-container">
-            <!-- 使用服务器托管的背景图 -->
-            <view class="cta-bg"></view>
-            <view class="cta-content">
-              <view class="cta-tag-row">
-                <view class="cta-line"></view>
-                <text class="cta-tag">大师亲测</text>
+          <section class="almanac-section">
+            <ZenCard padding="0" class="almanac-card">
+              <view class="almanac-header">
+                <text class="almanac-en">Traditional Calendar</text>
+                <text class="almanac-lunar">{{ lunarMonthDay }} · {{ yueXiangText }}</text>
               </view>
-              <text class="cta-title">年度深度运势解析</text>
-              <text class="cta-desc">探寻生命律动，预见未来先机</text>
-            </view>
-            <view class="cta-arrow">
-              <text class="material-symbols-outlined">arrow_forward</text>
-            </view>
-          </view>
-        </ZenCard>
-      </section>
-    </main>
+              <view class="almanac-body">
+                <view class="almanac-col">
+                  <text class="col-tag col-tag--yi">宜</text>
+                  <view class="col-content">
+                    <text v-for="item in dayYiList" :key="item" class="luck-text">{{ item }}</text>
+                    <text v-if="dayYiList.length === 0" class="luck-text luck-text--empty">—</text>
+                  </view>
+                </view>
+                <view class="almanac-col">
+                  <text class="col-tag col-tag--ji">忌</text>
+                  <view class="col-content">
+                    <text v-for="item in dayJiList" :key="item" class="unluck-text">{{ item }}</text>
+                    <text v-if="dayJiList.length === 0" class="unluck-text unluck-text--empty">—</text>
+                  </view>
+                </view>
+              </view>
+            </ZenCard>
+          </section>
+
+          <section class="cta-section">
+            <ZenCard class="cta-card">
+              <view class="cta-container">
+                <view class="cta-bg"></view>
+                <view class="cta-content">
+                  <view class="cta-tag-row">
+                    <view class="cta-line"></view>
+                    <text class="cta-tag">大师亲测</text>
+                  </view>
+                  <text class="cta-title">年度深度运势解析</text>
+                  <text class="cta-desc">探寻生命律动，预见未来先机</text>
+                </view>
+                <view class="cta-arrow">
+                  <text class="material-symbols-outlined">arrow_forward</text>
+                </view>
+              </view>
+            </ZenCard>
+          </section>
+        </main>
+      </template>
+
+    </view><!-- end content-area -->
 
     <ZenTabBar :current="0" />
-
-    <!-- 零档案破冰引导遮罩 -->
-    <InitialGuideOverlay
-      :visible="showGuideOverlay"
-      @start="handleGuideStart"
-      @dismiss="handleGuideOverlayDismiss"
-    />
   </view>
 </template>
 
@@ -159,6 +195,7 @@ import ZenHeader from '@/components/ZenHeader/ZenHeader.vue'
 import ZenCard from '@/components/ZenCard/ZenCard.vue'
 import ZenTabBar from '@/components/ZenTabBar/ZenTabBar.vue'
 import InitialGuideOverlay from '@/components/InitialGuideOverlay/InitialGuideOverlay.vue'
+import DailyZenLot from '@/components/DailyZenLot/DailyZenLot.vue'
 import { Solar } from 'lunar-javascript'
 import { useArchiveStore } from '@/store/useArchiveStore'
 import { useUserStore } from '@/store/useUserStore'
@@ -166,6 +203,9 @@ import { useUserStore } from '@/store/useUserStore'
 // --- 档案 Store ---
 const archiveStore = useArchiveStore()
 const userStore    = useUserStore()
+
+// 是否无档案（驱动整个首页的双模式切换）
+const hasNoArchive = computed(() => archiveStore.archives.length === 0)
 
 // ── 零档案破冰遮罩 ──
 const showGuideOverlay = ref(false)
@@ -391,11 +431,22 @@ onMounted(() => {
   background-image: url("/static/handmade-paper.png");
 }
 
+/* 内容区：relative 定位，让 overlay absolute 生效 */
+.content-area {
+  position: relative;
+  flex: 1;
+}
+
 /* 主内容滚动 */
 .main-scroll {
   padding: 30rpx 40rpx 200rpx;
   max-width: 800px;
   margin: 0 auto;
+}
+
+/* 禅签区块 */
+.zen-lot-section {
+  margin-top: 40rpx;
 }
 
 /* 顶部 Banner */
