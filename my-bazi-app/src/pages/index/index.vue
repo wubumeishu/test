@@ -42,13 +42,15 @@
           <view class="ring-wrapper">
             <view class="ring-bg"></view>
             <view class="ring-progress-wrapper">
-              <view class="ring-left" :style="{ transform: fortuneScore >= 50 ? 'rotate(180deg)' : `rotate(${(fortuneScore / 50) * 180}deg)` }"></view>
-              <view class="ring-right" :style="{ transform: fortuneScore >= 50 ? `rotate(${((fortuneScore - 50) / 50) * 180}deg)` : 'rotate(0deg)' }"></view>
+              <view class="ring-left" :style="{ transform: (fortuneScore ?? 0) >= 50 ? 'rotate(180deg)' : `rotate(${((fortuneScore ?? 0) / 50) * 180}deg)` }"></view>
+              <view class="ring-right" :style="{ transform: (fortuneScore ?? 0) >= 50 ? `rotate(${(((fortuneScore ?? 0) - 50) / 50) * 180}deg)` : 'rotate(0deg)' }"></view>
             </view>
           </view>
           <view class="score-box">
-            <text class="score-num brush-font">{{ fortuneScore }}</text>
-            <text class="score-label">今日运势指数</text>
+            <text class="score-num brush-font" :class="{ 'score-empty': fortuneScore === null }">
+              {{ fortuneScore !== null ? fortuneScore : '--' }}
+            </text>
+            <text class="score-label">{{ fortuneScore !== null ? '今日运势指数' : '录入生辰后解锁' }}</text>
           </view>
         </view>
 
@@ -145,7 +147,7 @@
     <InitialGuideOverlay
       :visible="showGuideOverlay"
       @start="handleGuideStart"
-      @dismiss="showGuideOverlay = false"
+      @dismiss="handleGuideOverlayDismiss"
     />
   </view>
 </template>
@@ -166,17 +168,19 @@ const archiveStore = useArchiveStore()
 const userStore    = useUserStore()
 
 // ── 零档案破冰遮罩 ──
-// 初始值 false，等 onShow 拉取档案后再判断，避免闪烁
 const showGuideOverlay = ref(false)
+// 用户本次会话内主动关闭后，不再自动弹出
+const overlayDismissed = ref(false)
 
-/**
- * 点击「开启起卦之旅」→ 跳转档案创建页
- * 带 isFirst=true 参数，让创建页显示更温馨的引导文案
- */
 function handleGuideStart() {
   uni.navigateTo({
     url: '/package_archive/pages/archive/add?isFirst=true'
   })
+}
+
+function handleGuideOverlayDismiss() {
+  overlayDismissed.value = true
+  showGuideOverlay.value = false
 }
 
 // ── 页面守卫：每次页面显示时检查登录态 ──
@@ -187,11 +191,12 @@ onShow(() => {
     return
   }
 
-  // 拉取最新档案列表，完成后判断是否显示遮罩
   archiveStore.fetchArchives().then(() => {
-    showGuideOverlay.value = archiveStore.archives.length === 0
+    // 用户主动关闭过遮罩则不再弹出，除非已经创建了档案（此时遮罩本来也不会弹）
+    if (!overlayDismissed.value) {
+      showGuideOverlay.value = archiveStore.archives.length === 0
+    }
   }).catch(() => {
-    // 拉取失败时保守处理：不显示遮罩，避免误导用户
     showGuideOverlay.value = false
   })
 })
@@ -252,34 +257,34 @@ const getDailySeed = (birthDate: string): number => {
   return Math.abs(hash)
 }
 
-// 运势指数（60–98），无默认档案时显示固定值 88
-const fortuneScore = computed<number>(() => {
+// 运势指数（60–98），无默认档案时返回 null
+const fortuneScore = computed<number | null>(() => {
   const archive = archiveStore.defaultArchive
-  if (!archive) return 88
+  if (!archive) return null
   const seed = getDailySeed(archive.birthDate)
   return 60 + (seed % 39)
 })
 
-// 事业点数（1–5）
+// 事业点数（1–5），无档案时返回 0（全灰）
 const careerLevel = computed<number>(() => {
   const archive = archiveStore.defaultArchive
-  if (!archive) return 3
+  if (!archive) return 0
   const seed = getDailySeed(archive.birthDate)
   return (seed % 5) + 1
 })
 
-// 财富点数（1–5）
+// 财富点数（1–5），无档案时返回 0
 const wealthLevel = computed<number>(() => {
   const archive = archiveStore.defaultArchive
-  if (!archive) return 4
+  if (!archive) return 0
   const seed = getDailySeed(archive.birthDate)
   return ((seed >> 1) % 5) + 1
 })
 
-// 姻缘点数（1–5）
+// 姻缘点数（1–5），无档案时返回 0
 const loveLevel = computed<number>(() => {
   const archive = archiveStore.defaultArchive
-  if (!archive) return 2
+  if (!archive) return 0
   const seed = getDailySeed(archive.birthDate)
   return ((seed >> 2) % 5) + 1
 })
@@ -605,6 +610,12 @@ onMounted(() => {
   font-size: 100rpx;
   color: #B23A34;
   line-height: 1;
+}
+
+.score-empty {
+  font-size: 80rpx;
+  color: rgba(178, 58, 52, 0.25);
+  letter-spacing: 8rpx;
 }
 
 .score-label {
