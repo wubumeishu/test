@@ -6,6 +6,7 @@ import os
 import json
 import logging
 import datetime
+from uuid import uuid4
 from typing import List, Optional, AsyncGenerator
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import StreamingResponse
@@ -13,6 +14,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel, Field
 from openai import AsyncOpenAI, APIConnectionError, APIStatusError, APITimeoutError
+from rq import Queue
+from redis import Redis as SyncRedis
 from src.database import get_db
 from src.models import Record
 from src.api.deps import get_current_user
@@ -365,3 +368,139 @@ async def stream_ai_analysis(
             "X-Accel-Buffering": "no",
         }
     )
+
+
+# ── RQ 异步队列接口 ────────────────────────────────────────────────────────────
+
+def _get_sync_redis() -> SyncRedis:
+    """获取同步 Redis 客户端（用于 RQ 入队和状态查询）"""
+    redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    return SyncRedis.from_url(redis_url, encoding="utf-8", decode_responses=True)
+
+
+class AnalyzeTaskRequest(BaseModel):
+    """
+    POST /api/ai/analyze 请求体
+
+    前端将完整的八字排盘数据传入，后端推入 RQ 队列后立即返回 task_id。
+    字段与 BaziAnalysisRequest 保持一致，方便前端复用同一份数据。
+    """
+    name: str = Field(default="命主")
+    gender: int = Field(description="性别：0=女，1=男")
+    solar_date: str = Field(default="")
+    lunar_date: str = Field(default="")
+    shengxiao: str = Field(default="")
+    bazi_string: str = Field(default="")
+    year_pillar: PillarData = Field(default_factory=PillarData)
+    month_pillar: PillarData = Field(default_factory=PillarData)
+    day_pillar: PillarData = Field(default_factory=PillarData)
+    hour_pillar: PillarData = Field(default_factory=PillarData)
+    day_master: str = Field(default="")
+    day_master_wuxing: str = Field(default="")
+
+
+class AnalyzeTaskResponse(BaseModel):
+    """POST /api/ai/analyze 响应体"""
+    task_id: str = Field(..., description="任务 ID，用于轮询进度")
+    status: str = Field(default="pending", description="初始状态")
+
+
+class TaskProgressResponse(BaseModel):
+    """GET /api/ai/task/{task_id} 响应体"""
+    task_id: str
+    status: str = Field(..., description="pending | running | done | error")
+    content: str = Field(default="", description="已生成的文本内容（流式追加）")
+    error: Optional[str] = Field(default=None, description="错误信息（status=error 时）")
+
+
+@router.post("/analyze", response_model=AnalyzeTaskResponse, summary="提交 AI 分析任务（异步）")
+async def submit_analyze_task(
+    request: AnalyzeTaskRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """
+    提交八字 AI 深度分析任务到 RQ 队列，立即返回 task_id。
+
+    前端拿到 task_id 后，通过轮询 GET /api/ai/task/{task_id} 获取进度。
+
+    优势：
+    - 不阻塞 HTTP 连接，彻底解决超时问题
+    - RQ Worker 独立进程，服务重启不丢任务（任务已入队）
+    - Redis 缓存结果，同一 task_id 可多次查询
+    """
+    task_id = str(uuid4())
+
+    # 将排盘数据序列化为字典（PillarData 需要转换）
+    bazi_data = {
+        "name":             request.name,
+        "gender":           request.gender,
+        "solar_date":       request.solar_date,
+        "lunar_date":       request.lunar_date,
+        "shengxiao":        request.shengxiao,
+        "bazi_string":      request.bazi_string,
+        "day_master":       request.day_master,
+        "day_master_wuxing": request.day_master_wuxing,
+        "year_pillar":      request.year_pillar.model_dump(),
+        "month_pillar":     request.month_pillar.model_dump(),
+        "day_pillar":       request.day_pillar.model_dump(),
+        "hour_pillar":      request.hour_pillar.model_dump(),
+    }
+
+    try:
+        r = _get_sync_redis()
+        q = Queue("ai_analysis", connection=r)
+
+        # 写入初始状态
+        r.setex(f"task_status:{task_id}", 7200, "pending")
+        r.setex(f"task_content:{task_id}", 7200, "")
+
+        # 推入队列（job_timeout=180s，给 DeepSeek 足够时间）
+        from src.tasks import ai_analysis_task
+        q.enqueue(
+            ai_analysis_task,
+            task_id,
+            bazi_data,
+            job_timeout=180,
+        )
+
+        logger.info(f"[AI Queue] 任务已入队，task_id={task_id}，用户={current_user.user_id}")
+        return AnalyzeTaskResponse(task_id=task_id, status="pending")
+
+    except Exception as e:
+        logger.error(f"[AI Queue] 入队失败：{e}")
+        raise HTTPException(status_code=503, detail=f"任务队列不可用：{e}")
+
+
+@router.get("/task/{task_id}", response_model=TaskProgressResponse, summary="查询 AI 分析任务进度")
+async def get_task_progress(
+    task_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    """
+    查询 AI 分析任务的当前进度。
+
+    前端轮询此接口（建议间隔 1.5 秒），根据 status 决定行为：
+    - pending：任务排队中，继续等待
+    - running：正在生成，content 字段包含已生成的部分文本
+    - done：生成完成，content 为完整报告
+    - error：生成失败，error 字段包含错误信息
+
+    content 字段是追加写入的，每次返回的都是完整的已生成内容（非增量），
+    前端直接替换显示即可，无需自行拼接。
+    """
+    try:
+        r = _get_sync_redis()
+        status  = r.get(f"task_status:{task_id}") or "pending"
+        content = r.get(f"task_content:{task_id}") or ""
+        error   = r.get(f"task_error:{task_id}")
+
+        return TaskProgressResponse(
+            task_id=task_id,
+            status=status,
+            content=content,
+            error=error,
+        )
+
+    except Exception as e:
+        logger.error(f"[AI Queue] 查询进度失败：{e}")
+        raise HTTPException(status_code=503, detail=f"Redis 不可用：{e}")
