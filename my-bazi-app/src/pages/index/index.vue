@@ -15,7 +15,7 @@
           @dismiss="handleGuideOverlayDismiss"
         />
 
-        <!-- 遮罩关闭后展示的内容：日历卡片 + 禅签 -->
+        <!-- 遮罩关闭后展示的内容：日历卡片 + 灵犀日课 -->
         <main class="main-scroll">
           <section class="top-card-section">
             <ZenCard class="top-banner">
@@ -47,9 +47,9 @@
             </ZenCard>
           </section>
 
-          <!-- 每日禅签 -->
+          <!-- 灵犀日课（无档案模式：抽签后显示引导） -->
           <section class="zen-lot-section">
-            <DailyZenLot @goCreate="handleGuideStart" />
+            <DailyZenLot :has-archive="false" @goCreate="handleGuideStart" />
           </section>
         </main>
 
@@ -58,6 +58,11 @@
       <!-- ══ 有档案：正常运势模式 ══ -->
       <template v-else>
         <main class="main-scroll">
+
+          <!-- 灵犀日课（有档案模式：抽签后显示运势指数） -->
+          <section class="zen-lot-section zen-lot-top">
+            <DailyZenLot :has-archive="true" @goCreate="handleGuideStart" />
+          </section>
           <section class="top-card-section">
             <ZenCard class="top-banner">
               <view class="banner-container">
@@ -447,6 +452,12 @@ onMounted(() => {
 /* 禅签区块 */
 .zen-lot-section {
   margin-top: 40rpx;
+}
+
+/* 有档案时禅签置顶，在日历卡片之前 */
+.zen-lot-top {
+  margin-top: 0;
+  margin-bottom: 40rpx;
 }
 
 /* 顶部 Banner */

@@ -2,6 +2,7 @@
 每日禅语路由
 
 GET /api/zen/daily   根据「日期 + UserID」返回当日固定禅语（日课）
+                     有档案时额外返回 fortune_scores（运势指数）
 
 算法：
   seed = djb2_hash(f"{user_id}-{today}")
@@ -11,16 +12,19 @@ GET /api/zen/daily   根据「日期 + UserID」返回当日固定禅语（日�
   Redis Key: zen_daily:{user_id}:{today}
   TTL: 到当天 23:59:59（精确到秒），确保次日自动刷新
 """
-import hashlib
+import json
 from datetime import datetime, date, time
 from typing import Optional
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 import redis.asyncio as aioredis
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 from src.api.deps import get_current_user
 from src.core.redis import get_redis
+from src.database import get_db
 from src.models.user import User
 
 router = APIRouter(prefix="/api/zen", tags=["每日禅语"])
@@ -106,11 +110,21 @@ ZEN_COUNT = len(ZEN_LIBRARY)
 
 # ── 响应模型 ──────────────────────────────────────────────────────────────────
 
+class FortuneScores(BaseModel):
+    """有档案时返回的今日运势指数（1-100）"""
+    overall: int   # 综合运势
+    wealth:  int   # 财富
+    career:  int   # 事业
+    love:    int   # 姻缘
+    health:  int   # 健康
+
+
 class DailyZenResponse(BaseModel):
     id: int
     content: str
     author: Optional[str] = None
     date: str
+    fortune_scores: Optional[FortuneScores] = None  # 有档案时才有值
 
 
 # ── 工具函数 ──────────────────────────────────────────────────────────────────
@@ -150,26 +164,49 @@ def _pick_zen(user_id: str, today: str) -> dict:
     return ZEN_LIBRARY[idx]
 
 
+def _calc_fortune(user_id: str, birth_date: str, today: str) -> FortuneScores:
+    """
+    根据「user_id + 出生日期 + 今日日期」确定性地计算五维运势指数。
+    范围 55-98，避免极端低分影响用户情绪。
+    同一用户同一天结果恒定。
+    """
+    def score(suffix: str) -> int:
+        seed = _djb2_hash(f"{user_id}-{birth_date}-{today}-{suffix}")
+        return 55 + (seed % 44)   # 55~98
+
+    return FortuneScores(
+        overall=score("overall"),
+        wealth =score("wealth"),
+        career =score("career"),
+        love   =score("love"),
+        health =score("health"),
+    )
+
+
 # ── 路由 ──────────────────────────────────────────────────────────────────────
 
 @router.get("/daily", response_model=DailyZenResponse, summary="获取今日禅语（日课）")
 async def get_daily_zen(
     current_user: User = Depends(get_current_user),
     redis_client: aioredis.Redis = Depends(get_redis),
+    db: AsyncSession = Depends(get_db),
 ):
     """
-    根据「当前日期 + UserID」返回当日固定禅语。
+    根据「当前日期 + UserID」返回当日固定禅语，有档案时额外返回运势指数。
 
     同一用户同一天调用多次，结果完全一致（日课特性）。
     结果缓存至当天 23:59:59，次日自动刷新。
 
-    返回示例：
+    返回示例（有档案）：
     ```json
     {
       "id": 12,
       "content": "过去心不可得，现在心不可得，未来心不可得。",
       "author": "金刚经",
-      "date": "2026-05-10"
+      "date": "2026-05-10",
+      "fortune_scores": {
+        "overall": 82, "wealth": 75, "career": 88, "love": 71, "health": 90
+      }
     }
     ```
     """
@@ -179,26 +216,54 @@ async def get_daily_zen(
     # ── 读缓存 ────────────────────────────────────────────────────────────────
     cached = await redis_client.get(cache_key)
     if cached:
-        import json
         data = json.loads(cached)
         return DailyZenResponse(**data)
 
     # ── 计算今日禅语 ──────────────────────────────────────────────────────────
     zen = _pick_zen(current_user.user_id, today)
-    result = DailyZenResponse(
+
+    # ── 查询默认档案，有则计算运势指数 ───────────────────────────────────────
+    fortune_scores = None
+    try:
+        from src.models.archive import Archive
+        stmt = select(Archive).where(
+            Archive.user_id == current_user.user_id,
+            Archive.is_default == True,
+        ).limit(1)
+        result = await db.execute(stmt)
+        archive = result.scalar_one_or_none()
+
+        if archive is None:
+            # 没有默认档案，取第一个档案
+            stmt2 = select(Archive).where(
+                Archive.user_id == current_user.user_id
+            ).limit(1)
+            result2 = await db.execute(stmt2)
+            archive = result2.scalar_one_or_none()
+
+        if archive and archive.birth_date:
+            fortune_scores = _calc_fortune(
+                current_user.user_id,
+                str(archive.birth_date),
+                today,
+            )
+    except Exception:
+        pass  # 查询失败时静默处理，不影响禅语返回
+
+    result_obj = DailyZenResponse(
         id=zen["id"],
         content=zen["content"],
         author=zen.get("author"),
         date=today,
+        fortune_scores=fortune_scores,
     )
 
     # ── 写缓存（精确到当天 23:59:59）─────────────────────────────────────────
-    import json
     ttl = _seconds_until_midnight()
     await redis_client.setex(
         cache_key,
         ttl,
-        json.dumps(result.model_dump(), ensure_ascii=False),
+        json.dumps(result_obj.model_dump(), ensure_ascii=False),
     )
 
-    return result
+    return result_obj
