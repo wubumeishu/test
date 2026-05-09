@@ -384,6 +384,55 @@ export const useBaziStore = defineStore('bazi', () => {
   }
 
   /**
+   * 从云端获取历史记录并更新本地列表
+   */
+  async function fetchHistoryFromCloud() {
+    try {
+      console.log('📥 [useBaziStore] 开始从云端获取历史记录...')
+      const res = await request<{ total: number; records: any[] }>({
+        url: '/api/fortune/records?limit=50&offset=0',
+        method: 'GET'
+      })
+      
+      const cloudRecords = res.records || []
+      
+      // 转换云端记录为本地所需的格式
+      const convertedRecords = cloudRecords.map(raw => {
+        const fej = raw.five_elements_json ?? {}
+        const resolvedName = raw.name ?? fej.name ?? raw.bazi_json?.name ?? '未知'
+        
+        return {
+          success: true,
+          message: '历史记录恢复',
+          record_id: raw.record_id ?? '',
+          name: resolvedName,
+          gender: raw.gender ?? fej.gender ?? 1,
+          solar_date: fej.solar_date ?? raw.solar_date ?? '',
+          lunar_date: fej.lunar_date ?? raw.lunar_date ?? '',
+          shengxiao: fej.shengxiao ?? raw.shengxiao ?? '',
+          bazi_string: fej.bazi_string ?? raw.bazi_string ?? raw.bazi_str ?? '',
+          year_pillar: fej.year_pillar ?? raw.year_pillar ?? {},
+          month_pillar: fej.month_pillar ?? raw.month_pillar ?? {},
+          day_pillar: fej.day_pillar ?? raw.day_pillar ?? {},
+          hour_pillar: fej.hour_pillar ?? raw.hour_pillar ?? {},
+          day_master: fej.day_master ?? raw.day_master ?? '',
+          day_master_wuxing: fej.day_master_wuxing ?? raw.day_master_wuxing ?? '',
+          wuxing_strength: fej.wuxing_strength ?? raw.wuxing_strength ?? { jin: 0, mu: 0, shui: 0, huo: 0, tu: 0 },
+          wuxing_summary: fej.wuxing_summary ?? raw.wuxing_summary ?? { 金: 0, 木: 0, 水: 0, 火: 0, 土: 0 },
+          ai_report: raw.ai_report_markdown ?? raw.ai_report ?? null,
+          created_at: raw.created_at ?? raw.timestamp
+        }
+      })
+      
+      historyList.value = convertedRecords
+      saveToLocalStorage()
+      console.log(`✅ [useBaziStore] 已从云端获取 ${convertedRecords.length} 条历史记录并同步到本地`)
+    } catch (error) {
+      console.error('❌ [useBaziStore] 从云端获取历史记录失败:', error)
+    }
+  }
+
+  /**
    * 清空历史记录
    */
   function clearHistory() {
@@ -519,6 +568,7 @@ export const useBaziStore = defineStore('bazi', () => {
     calculateByArchive,
     calculateByData,
     loadFromLocalStorage,
+    fetchHistoryFromCloud,
     clearHistory,
     deleteHistoryItem,
     setCurrentBaziData,

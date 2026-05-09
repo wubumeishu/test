@@ -90,7 +90,7 @@ async def init_db():
                     user_id=MOCK_USER_ID,
                     nickname="默认用户",
                     phone=None,
-                    wechat_unionid=None,
+                    wechat_openid=None,
                     avatar_url=None,
                 )
                 session.add(mock_user)

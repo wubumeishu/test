@@ -30,16 +30,18 @@ class UserAdmin(ModelView, model=User):
         User.nickname: "用户昵称",
         User.avatar_url: "头像链接",
         User.hashed_password: "登录密码",
-        User.wechat_unionid: "微信UnionID",
+        User.wechat_openid: "微信OpenID",
+        User.is_vip: "VIP状态",
+        User.vip_expires_at: "VIP到期时间",
         User.created_at: "注册时间",
         User.updated_at: "更新时间",
         User.last_login: "最近登录"
     }
-    
+
     # --- 视图控制 ---
-    column_list = [User.phone, User.nickname, User.created_at, User.last_login]
-    column_details_list = [User.user_id, User.phone, User.nickname, User.wechat_unionid, User.created_at, User.last_login]
-    form_columns = [User.phone, User.nickname, User.avatar_url, User.hashed_password]
+    column_list = [User.phone, User.nickname, User.is_vip, User.created_at, User.last_login]
+    column_details_list = [User.user_id, User.phone, User.nickname, User.wechat_openid, User.is_vip, User.vip_expires_at, User.created_at, User.last_login]
+    form_columns = [User.phone, User.nickname, User.avatar_url, User.hashed_password, User.is_vip, User.vip_expires_at]
     column_searchable_list = [User.phone, User.nickname]
     column_sortable_list = [User.created_at, User.last_login]
     column_default_sort = [(User.created_at, True)]

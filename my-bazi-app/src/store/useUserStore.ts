@@ -10,6 +10,8 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { post } from '../utils/request'
+import { useArchiveStore } from './useArchiveStore'
+import { useBaziStore } from './useBaziStore'
 
 // ==================== 类型定义 ====================
 
@@ -52,6 +54,17 @@ export const useUserStore = defineStore('user', () => {
     uni.setStorageSync('token',     accessToken)
     uni.setStorageSync('user_info', user)
     console.log('✅ [useUserStore] 认证信息已持久化，用户:', user.phone)
+
+    // 登录后强制拉取云端数据对齐
+    try {
+      const archiveStore = useArchiveStore()
+      const baziStore = useBaziStore()
+      
+      archiveStore.fetchArchives()
+      baziStore.fetchHistoryFromCloud()
+    } catch (e) {
+      console.error('拉取云端数据失败:', e)
+    }
   }
 
   // ==================== Actions ====================
@@ -135,13 +148,24 @@ export const useUserStore = defineStore('user', () => {
     token.value    = ''
     userInfo.value = null
 
-    // 2. 精确删除认证相关 Key（不影响其他业务缓存，如 bazi_history）
-    uni.removeStorageSync('token')
-    uni.removeStorageSync('user_info')
+    // 2. 清理所有本地存储
+    uni.clearStorageSync()
 
-    console.log('✅ [useUserStore] 已退出登录，token 已清空')
+    // 3. 清理相关 Store 的状态
+    try {
+      const archiveStore = useArchiveStore()
+      archiveStore.clearAllArchives()
+      
+      const baziStore = useBaziStore()
+      baziStore.clearHistory()
+      baziStore.clearCurrentBaziData()
+    } catch (e) {
+      console.error('清理其他 Store 状态失败:', e)
+    }
 
-    // 3. 跳转（使用 reLaunch 清空页面栈，防止返回键回到受保护页面）
+    console.log('✅ [useUserStore] 已退出登录，数据已彻底打扫干净')
+
+    // 4. 跳转（使用 reLaunch 清空页面栈，防止返回键回到受保护页面）
     if (redirectToLogin) {
       uni.reLaunch({ url: '/pages/login/login' })
     }
