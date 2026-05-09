@@ -627,18 +627,19 @@ export const useBaziStore = defineStore('bazi', () => {
   }
 
   /**
-   * 启动轮询，每 1.5 秒查询一次任务进度
+   * 启动轮询，动态间隔：前 5 次 1s（任务刚提交，快速响应），之后 2s（减少请求压力）
    * 连续失败 3 次后自动停止并提示用户
    */
   function startAiPolling() {
     if (!aiTaskId.value) return
 
-    let failCount = 0
+    let failCount  = 0
+    let pollCount  = 0
     const MAX_FAIL = 3
 
     console.log('🔄 [useBaziStore] 开始轮询 AI 任务进度...')
 
-    const timer = setInterval(async () => {
+    const poll = async () => {
       try {
         const res = await get<{
           task_id: string
@@ -647,20 +648,17 @@ export const useBaziStore = defineStore('bazi', () => {
           error: string | null
         }>(`/api/ai/task/${aiTaskId.value}`)
 
-        failCount = 0  // 成功则重置失败计数
+        failCount = 0
+        pollCount++
 
-        // 更新状态
         aiTaskStatus.value = res.status as any
 
-        // 更新已生成内容（后端返回的是完整累积文本，直接替换）
         if (res.content) {
           currentAiReport.value = res.content
         }
 
-        // 任务完成
         if (res.status === 'done') {
           console.log(`✅ [useBaziStore] AI 分析完成，字数: ${res.content?.length || 0}`)
-          // 同步到 currentBaziData.ai_report，供历史记录使用
           if (currentBaziData.value) {
             currentBaziData.value.ai_report = res.content
           }
@@ -668,13 +666,18 @@ export const useBaziStore = defineStore('bazi', () => {
           return
         }
 
-        // 任务失败
         if (res.status === 'error') {
           console.error('❌ [useBaziStore] AI 任务失败:', res.error)
           uni.showToast({ title: res.error || '星路繁忙，请稍后重试', icon: 'none', duration: 2500 })
           stopAiPolling()
           return
         }
+
+        // 动态间隔：前 5 次 1s，之后 2s
+        const delay = pollCount < 5 ? 1000 : 2000
+        const timer = setTimeout(poll, delay) as unknown as ReturnType<typeof setInterval>
+        registerTimer(timer)
+        aiPollingTimer.value = timer
 
       } catch (error) {
         failCount++
@@ -684,13 +687,18 @@ export const useBaziStore = defineStore('bazi', () => {
           aiTaskStatus.value = 'error'
           uni.showToast({ title: '星路繁忙，请稍后重试', icon: 'none', duration: 2500 })
           stopAiPolling()
+          return
         }
-      }
-    }, 1500)
 
-    // 注册到全局定时器表（登出时自动清除）
-    registerTimer(timer)
-    aiPollingTimer.value = timer
+        // 失败后 2s 重试
+        const timer = setTimeout(poll, 2000) as unknown as ReturnType<typeof setInterval>
+        registerTimer(timer)
+        aiPollingTimer.value = timer
+      }
+    }
+
+    // 立即执行第一次
+    poll()
   }
 
   // ==================== 返回 ====================
