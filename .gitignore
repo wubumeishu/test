@@ -48,6 +48,11 @@ __pycache__/
 *.pyc
 *.pyo
 
+# Python 虚拟环境
+venv/
+.venv/
+env/
+
 # 本地数据库（开发用，不上传）
 *.db
 *.sqlite
