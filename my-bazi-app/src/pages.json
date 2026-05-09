@@ -31,6 +31,13 @@
 			}
 		},
 		{
+			"path": "pages/mine/profile",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "个人资料"
+			}
+		},
+		{
 			"path": "pages/result/result",
 			"style": {
 				"navigationStyle": "custom",

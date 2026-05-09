@@ -4,7 +4,7 @@
 
     <view class="main-content">
       <view class="profile-section">
-        <view class="avatar-wrapper">
+        <view class="avatar-wrapper" @click="goToProfile">
           <view class="avatar-border">
             <image 
               class="avatar-img" 
@@ -17,7 +17,7 @@
             <text class="material-symbols-outlined edit-icon">edit</text>
           </view>
         </view>
-        <text class="user-name">云水禅心</text>
+        <text class="user-name">{{ userStore.userInfo?.nickname || '云水禅心' }}</text>
         <text class="user-tag">ZEN PRACTITIONER</text>
       </view>
 
@@ -184,7 +184,10 @@ const DEFAULT_AVATAR = '/static/logo.png'
  * - 默认使用 PNG 格式的 DiceBear 头像（避免小程序/App 不支持 SVG）
  * - 加载失败时自动降级为本地 logo
  */
-const avatarSrc = ref('https://api.dicebear.com/7.x/adventurer-neutral/png?seed=Zen')
+const avatarSrc = ref(
+  userStore.userInfo?.avatar_url ||
+  'https://api.dicebear.com/7.x/adventurer-neutral/png?seed=Zen'
+)
 
 /** 头像加载失败 → 降级为本地 logo */
 const onAvatarError = () => {
@@ -198,6 +201,13 @@ onShow(() => {
   archiveStore.fetchArchives()
   fetchRecordCount()
 })
+
+/**
+ * 跳转到个人资料编辑页
+ */
+const goToProfile = () => {
+  uni.navigateTo({ url: '/pages/mine/profile' })
+}
 
 /**
  * 点击档案卡片 → 跳转编辑页

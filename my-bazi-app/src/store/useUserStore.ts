@@ -1,6 +1,10 @@
 /**
- * 用户状态管理 Store
- * 负责管理用户登录状态和用户信息
+ * 用户状态管理 Store (v3.0)
+ *
+ * 新增：
+ *   - loginWithWechat()：微信静默登录（code → OpenID → JWT）
+ *   - updateProfile()：更新昵称/头像/绑定手机号
+ *   - is_vip 字段
  *
  * 存储 Key 约定（全局唯一，request.ts 与此保持一致）：
  *   token     → uni.getStorageSync('token')
@@ -9,7 +13,7 @@
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { post } from '../utils/request'
+import { post, put } from '../utils/request'
 import { useArchiveStore } from './useArchiveStore'
 import { useBaziStore } from './useBaziStore'
 
@@ -17,9 +21,11 @@ import { useBaziStore } from './useBaziStore'
 
 export interface UserInfo {
   id: string
-  phone: string
+  phone?: string | null
   nickname?: string
   avatar_url?: string
+  is_vip?: boolean
+  wechat_openid?: string | null
 }
 
 interface SendCodeResponse {
@@ -30,6 +36,13 @@ interface AuthResponse {
   access_token: string
   token_type: string
   user: UserInfo
+}
+
+interface UpdateProfilePayload {
+  nickname?: string
+  avatar_url?: string
+  phone?: string
+  sms_code?: string
 }
 
 // ==================== Store 定义 ====================
@@ -68,6 +81,56 @@ export const useUserStore = defineStore('user', () => {
   }
 
   // ==================== Actions ====================
+
+  /**
+   * 微信静默登录（v3.0 新增）
+   *
+   * 流程：
+   *   1. 调用 uni.login({ provider: 'weixin' }) 获取临时 code
+   *   2. 将 code 发给后端 POST /api/auth/login/wechat
+   *   3. 后端用 code 换取 OpenID，静默注册或登录，返回 JWT
+   *   4. 持久化 Token 和用户信息
+   *
+   * 整个过程对用户无感（不弹任何 Toast）。
+   * 仅在出错时静默打印日志，不影响 App 启动流程。
+   */
+  async function loginWithWechat(): Promise<void> {
+    // 仅在微信小程序环境执行
+    // #ifdef MP-WEIXIN
+    try {
+      console.log('🔄 [useUserStore] 开始微信静默登录...')
+
+      // 步骤 1：获取微信临时 code
+      const loginResult = await new Promise<UniApp.LoginRes>((resolve, reject) => {
+        uni.login({
+          provider: 'weixin',
+          success: resolve,
+          fail: reject,
+        })
+      })
+
+      if (!loginResult.code) {
+        console.warn('⚠️ [useUserStore] 微信登录未返回 code，跳过静默登录')
+        return
+      }
+
+      console.log('✅ [useUserStore] 获取微信 code 成功')
+
+      // 步骤 2：将 code 发给后端换取 JWT
+      const res = await post<AuthResponse>('/api/auth/login/wechat', {
+        code: loginResult.code,
+      })
+
+      // 步骤 3：持久化（静默，不弹 Toast）
+      _persistAuth(res.access_token, res.user)
+      console.log('✅ [useUserStore] 微信静默登录成功，用户:', res.user.nickname)
+    } catch (error: any) {
+      // 静默失败：不弹 Toast，不阻断 App 启动
+      // 用户可以在登录页手动登录
+      console.warn('⚠️ [useUserStore] 微信静默登录失败（静默处理）:', error?.message ?? error)
+    }
+    // #endif
+  }
 
   /**
    * 密码登录
@@ -204,12 +267,35 @@ export const useUserStore = defineStore('user', () => {
     }
   }
 
+  /**
+   * 提交资料更新到后端（v3.0 新增）
+   *
+   * 支持：昵称、头像、绑定手机号（需同时传 sms_code）
+   * 对应后端：PUT /api/auth/profile
+   *
+   * @param payload 要更新的字段（只传需要修改的）
+   */
+  async function updateProfile(payload: UpdateProfilePayload): Promise<void> {
+    try {
+      const res = await put<AuthResponse>('/api/auth/profile', payload)
+      // 后端返回最新的用户信息，同步更新本地
+      _persistAuth(res.access_token, res.user)
+      uni.showToast({ title: '资料已更新', icon: 'success', duration: 1500 })
+      console.log('✅ [useUserStore] 资料更新成功')
+    } catch (error: any) {
+      const msg = error.data?.detail || error.message || '更新失败，请重试'
+      uni.showToast({ title: msg, icon: 'none', duration: 2000 })
+      throw error
+    }
+  }
+
   // ==================== 返回 ====================
 
   return {
     token,
     userInfo,
     isLoggedIn,
+    loginWithWechat,
     loginWithPassword,
     loginWithCode,
     register,
@@ -217,5 +303,6 @@ export const useUserStore = defineStore('user', () => {
     logout,
     restoreLoginState,
     updateUserInfo,
+    updateProfile,
   }
 })

@@ -47,6 +47,20 @@ onLaunch(() => {
   setTimeout(() => {
     loadAppFonts();
     pingBackend();
+
+    // 3. 微信静默登录（仅在未登录时触发，已登录则跳过）
+    //    必须在 pingBackend 之后执行，确保后端已就绪
+    //    整个过程对用户无感，失败静默处理不影响 App 启动
+    // #ifdef MP-WEIXIN
+    if (!userStore.isLoggedIn) {
+      console.log('[App] 未检测到登录状态，尝试微信静默登录...');
+      userStore.loginWithWechat().catch(() => {
+        // 静默失败，用户将在登录页手动登录
+      });
+    } else {
+      console.log('[App] 已登录，跳过微信静默登录');
+    }
+    // #endif
   }, 0);
 
   // 注意：启动导航不在此处处理。
