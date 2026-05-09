@@ -417,53 +417,68 @@ class TaskProgressResponse(BaseModel):
 async def submit_analyze_task(
     request: AnalyzeTaskRequest,
     current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     提交八字 AI 深度分析任务到 RQ 队列，立即返回 task_id。
 
-    前端拿到 task_id 后，通过轮询 GET /api/ai/task/{task_id} 获取进度。
-
-    优势：
-    - 不阻塞 HTTP 连接，彻底解决超时问题
-    - RQ Worker 独立进程，服务重启不丢任务（任务已入队）
-    - Redis 缓存结果，同一 task_id 可多次查询
+    首测识别逻辑：
+    - 查询当前用户的测算记录总数
+    - 若 record_count == 0（本次是第一次），标记为首测
+    - 首测任务注入破冰欢迎词指令，并以最高优先级（at_front=True）入队
     """
     task_id = str(uuid4())
 
-    # 将排盘数据序列化为字典（PillarData 需要转换）
+    # ── 首测识别：查询用户历史记录数 ──────────────────────────────────────────
+    from src.models.record import Record
+    from sqlalchemy import func
+    count_result = await db.execute(
+        select(func.count()).select_from(Record).where(
+            Record.user_id == current_user.user_id
+        )
+    )
+    record_count = count_result.scalar() or 0
+    is_first_reading = (record_count == 0)
+
+    if is_first_reading:
+        logger.info(f"[AI Queue] 🌟 首测用户，将注入破冰指令并优先入队，user={current_user.user_id}")
+
     bazi_data = {
-        "name":             request.name,
-        "gender":           request.gender,
-        "solar_date":       request.solar_date,
-        "lunar_date":       request.lunar_date,
-        "shengxiao":        request.shengxiao,
-        "bazi_string":      request.bazi_string,
-        "day_master":       request.day_master,
+        "name":              request.name,
+        "gender":            request.gender,
+        "solar_date":        request.solar_date,
+        "lunar_date":        request.lunar_date,
+        "shengxiao":         request.shengxiao,
+        "bazi_string":       request.bazi_string,
+        "day_master":        request.day_master,
         "day_master_wuxing": request.day_master_wuxing,
-        "year_pillar":      request.year_pillar.model_dump(),
-        "month_pillar":     request.month_pillar.model_dump(),
-        "day_pillar":       request.day_pillar.model_dump(),
-        "hour_pillar":      request.hour_pillar.model_dump(),
+        "year_pillar":       request.year_pillar.model_dump(),
+        "month_pillar":      request.month_pillar.model_dump(),
+        "day_pillar":        request.day_pillar.model_dump(),
+        "hour_pillar":       request.hour_pillar.model_dump(),
     }
 
     try:
         r = _get_sync_redis()
         q = Queue("ai_analysis", connection=r)
 
-        # 写入初始状态
         r.setex(f"task_status:{task_id}", 7200, "pending")
         r.setex(f"task_content:{task_id}", 7200, "")
 
-        # 推入队列（job_timeout=180s，给 DeepSeek 足够时间）
         from src.tasks import ai_analysis_task
         q.enqueue(
             ai_analysis_task,
             task_id,
             bazi_data,
+            is_first_reading,          # 传入首测标志
             job_timeout=180,
+            at_front=is_first_reading, # 首测插队到队列最前端
         )
 
-        logger.info(f"[AI Queue] 任务已入队，task_id={task_id}，用户={current_user.user_id}")
+        logger.info(
+            f"[AI Queue] 任务已入队，task_id={task_id}，"
+            f"用户={current_user.user_id}，首测={is_first_reading}"
+        )
         return AnalyzeTaskResponse(task_id=task_id, status="pending")
 
     except Exception as e:

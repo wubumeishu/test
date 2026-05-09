@@ -41,8 +41,8 @@ def _get_ganzhi(year: int) -> str:
     return f"{_TIANGAN[(year - 4) % 10]}{_DIZHI[(year - 4) % 12]}"
 
 
-# ── System Prompt（与 ai.py 保持一致）────────────────────────────────────────
-_SYSTEM_PROMPT = """【角色设定】
+# ── System Prompt 基础版 ─────────────────────────────────────────────────────
+_SYSTEM_PROMPT_BASE = """【角色设定】
 你是《云水禅心》的首席命理与心理学大师。你拥有20年四柱八字实战经验，并精通荣格心理学。你的文风：通透、深邃、极具文学美感与悲悯之心。
 
 【深度强制指令】（必须严格执行）
@@ -77,6 +77,35 @@ _SYSTEM_PROMPT = """【角色设定】
 
 【输出格式】
 直接输出 Markdown 格式的文本，不要包含 JSON 结构。使用 ### 作为章节标题，使用 **文字** 标注重点。"""
+
+# ── 首测专属破冰指令（追加在 System Prompt 末尾）────────────────────────────
+_FIRST_READING_ADDON = """
+
+【首测专属指令·破冰仪式感】（本次为该用户的第一份命理报告，必须严格执行）
+1. 这是一位新用户的第一份分析报告。请在保持专业准确的基础上，文字风格要更加具有启发性、温暖且充满哲理，让他感受到被看见、被理解的温度。
+2. 在第一篇章节正文开始之前，必须先输出一段独立的"破冰欢迎词"，格式如下：
+   - 使用 > 引用块格式
+   - 内容：以禅意散文的笔触，欢迎他开启探索自我之旅。可以用"星盘初开""命盘初启""第一次与自己的灵魂相遇"等意象，字数 60-100 字，充满温暖与哲理。
+3. 整体基调：比常规报告多一份温柔，少一份锋芒。在指出命主的挑战与困境时，要多给予心理支持与前行的勇气，而非单纯的命理判断。"""
+
+
+def _build_system_prompt(is_first_reading: bool = False) -> str:
+    """
+    动态构建 System Prompt。
+
+    Args:
+        is_first_reading: 是否为首测（用户的第一份命理报告）
+
+    Returns:
+        完整的 System Prompt 字符串
+    """
+    if is_first_reading:
+        return _SYSTEM_PROMPT_BASE + _FIRST_READING_ADDON
+    return _SYSTEM_PROMPT_BASE
+
+
+# 向后兼容：保留 _SYSTEM_PROMPT 常量供其他模块直接引用
+_SYSTEM_PROMPT = _SYSTEM_PROMPT_BASE
 
 
 def _build_user_prompt(bazi_data: dict) -> str:
@@ -125,7 +154,7 @@ def _get_sync_redis():
     return sync_redis.from_url(REDIS_URL, encoding="utf-8", decode_responses=True)
 
 
-def ai_analysis_task(task_id: str, bazi_data: dict) -> None:
+def ai_analysis_task(task_id: str, bazi_data: dict, is_first_reading: bool = False) -> None:
     """
     RQ 异步任务：调用 DeepSeek 生成八字深度分析报告
 
@@ -133,8 +162,9 @@ def ai_analysis_task(task_id: str, bazi_data: dict) -> None:
     使用 httpx 同步客户端 + 流式请求，逐 chunk 写入 Redis。
 
     Args:
-        task_id:   任务唯一标识（UUID），用于构造 Redis Key
-        bazi_data: 八字排盘数据字典（前端传来的完整排盘结果）
+        task_id:          任务唯一标识（UUID），用于构造 Redis Key
+        bazi_data:        八字排盘数据字典（前端传来的完整排盘结果）
+        is_first_reading: 是否为首测，True 时注入破冰欢迎词指令
     """
     r = _get_sync_redis()
 
@@ -148,14 +178,19 @@ def ai_analysis_task(task_id: str, bazi_data: dict) -> None:
         print(f"❌ [tasks] task_id={task_id} DEEPSEEK_API_KEY 未配置")
         return
 
+    # 动态构建 System Prompt（首测注入破冰指令）
+    system_prompt = _build_system_prompt(is_first_reading=is_first_reading)
+    if is_first_reading:
+        print(f"🌟 [tasks] 首测任务，已注入破冰指令，task_id={task_id}")
+
     user_prompt = _build_user_prompt(bazi_data)
     payload = {
         "model": "deepseek-chat",
-        "temperature": 0.85,
+        "temperature": 0.9 if is_first_reading else 0.85,  # 首测略提高创意度
         "max_tokens": 4000,
         "stream": True,
         "messages": [
-            {"role": "system", "content": _SYSTEM_PROMPT},
+            {"role": "system", "content": system_prompt},
             {"role": "user",   "content": user_prompt},
         ],
     }
