@@ -5,7 +5,7 @@
 
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import request from '../utils/request'
+import request, { get, post, registerTimer, unregisterTimer } from '../utils/request'
 
 // ==================== 类型定义 ====================
 
@@ -116,6 +116,14 @@ export const useBaziStore = defineStore('bazi', () => {
    * 当前排盘数据 (最近一次排盘的完整结果)
    */
   const currentBaziData = ref<BaziCalculateResponse | null>(null)
+
+  /**
+   * AI 异步任务状态
+   */
+  const currentAiReport  = ref<string>('')          // 已生成的 AI 报告文本（轮询追加）
+  const aiTaskId         = ref<string>('')           // 当前任务 ID
+  const aiTaskStatus     = ref<'idle' | 'pending' | 'running' | 'done' | 'error'>('idle')
+  const aiPollingTimer   = ref<ReturnType<typeof setInterval> | null>(null)
   
   /**
    * 历史记录列表 (本地缓存)
@@ -555,6 +563,136 @@ export const useBaziStore = defineStore('bazi', () => {
     console.log('✅ [useBaziStore] 已清空当前排盘数据')
   }
 
+  // ==================== AI 异步任务 ====================
+
+  /**
+   * 停止当前 AI 轮询定时器
+   */
+  function stopAiPolling() {
+    if (aiPollingTimer.value !== null) {
+      unregisterTimer(aiPollingTimer.value)
+      aiPollingTimer.value = null
+      console.log('⏹️ [useBaziStore] AI 轮询已停止')
+    }
+  }
+
+  /**
+   * 重置 AI 任务状态（开始新任务前调用）
+   */
+  function resetAiTask() {
+    stopAiPolling()
+    currentAiReport.value = ''
+    aiTaskId.value = ''
+    aiTaskStatus.value = 'idle'
+  }
+
+  /**
+   * 提交 AI 深度分析任务到后端队列
+   * 后端立即返回 task_id，前端随后开始轮询进度
+   *
+   * @param baziData 完整的排盘数据（BaziCalculateResponse）
+   */
+  async function submitAiTask(baziData: BaziCalculateResponse): Promise<void> {
+    resetAiTask()
+    aiTaskStatus.value = 'pending'
+
+    try {
+      console.log('📤 [useBaziStore] 提交 AI 分析任务...')
+
+      const res = await post<{ task_id: string; status: string }>('/api/ai/analyze', {
+        name:              baziData.name || '命主',
+        gender:            baziData.gender,
+        solar_date:        baziData.solar_date,
+        lunar_date:        baziData.lunar_date,
+        shengxiao:         baziData.shengxiao,
+        bazi_string:       baziData.bazi_string,
+        day_master:        baziData.day_master,
+        day_master_wuxing: baziData.day_master_wuxing,
+        year_pillar:       baziData.year_pillar,
+        month_pillar:      baziData.month_pillar,
+        day_pillar:        baziData.day_pillar,
+        hour_pillar:       baziData.hour_pillar,
+      })
+
+      aiTaskId.value = res.task_id
+      console.log('✅ [useBaziStore] 任务已入队，task_id:', res.task_id)
+
+      // 立即开始轮询
+      startAiPolling()
+    } catch (error: any) {
+      aiTaskStatus.value = 'error'
+      console.error('❌ [useBaziStore] 提交 AI 任务失败:', error)
+      uni.showToast({ title: '星路繁忙，请稍后重试', icon: 'none', duration: 2000 })
+    }
+  }
+
+  /**
+   * 启动轮询，每 1.5 秒查询一次任务进度
+   * 连续失败 3 次后自动停止并提示用户
+   */
+  function startAiPolling() {
+    if (!aiTaskId.value) return
+
+    let failCount = 0
+    const MAX_FAIL = 3
+
+    console.log('🔄 [useBaziStore] 开始轮询 AI 任务进度...')
+
+    const timer = setInterval(async () => {
+      try {
+        const res = await get<{
+          task_id: string
+          status: string
+          content: string
+          error: string | null
+        }>(`/api/ai/task/${aiTaskId.value}`)
+
+        failCount = 0  // 成功则重置失败计数
+
+        // 更新状态
+        aiTaskStatus.value = res.status as any
+
+        // 更新已生成内容（后端返回的是完整累积文本，直接替换）
+        if (res.content) {
+          currentAiReport.value = res.content
+        }
+
+        // 任务完成
+        if (res.status === 'done') {
+          console.log(`✅ [useBaziStore] AI 分析完成，字数: ${res.content?.length || 0}`)
+          // 同步到 currentBaziData.ai_report，供历史记录使用
+          if (currentBaziData.value) {
+            currentBaziData.value.ai_report = res.content
+          }
+          stopAiPolling()
+          return
+        }
+
+        // 任务失败
+        if (res.status === 'error') {
+          console.error('❌ [useBaziStore] AI 任务失败:', res.error)
+          uni.showToast({ title: res.error || '星路繁忙，请稍后重试', icon: 'none', duration: 2500 })
+          stopAiPolling()
+          return
+        }
+
+      } catch (error) {
+        failCount++
+        console.warn(`⚠️ [useBaziStore] 轮询失败 (${failCount}/${MAX_FAIL})`)
+
+        if (failCount >= MAX_FAIL) {
+          aiTaskStatus.value = 'error'
+          uni.showToast({ title: '星路繁忙，请稍后重试', icon: 'none', duration: 2500 })
+          stopAiPolling()
+        }
+      }
+    }, 1500)
+
+    // 注册到全局定时器表（登出时自动清除）
+    registerTimer(timer)
+    aiPollingTimer.value = timer
+  }
+
   // ==================== 返回 ====================
 
   return {
@@ -563,6 +701,10 @@ export const useBaziStore = defineStore('bazi', () => {
     baseInfo,
     currentBaziData,
     historyList,
+    // AI 异步任务状态
+    currentAiReport,
+    aiTaskId,
+    aiTaskStatus,
 
     // Actions
     calculateByArchive,
@@ -574,6 +716,10 @@ export const useBaziStore = defineStore('bazi', () => {
     setCurrentBaziData,
     clearCurrentBaziData,
     restoreHistoryData,
+    // AI 异步任务
+    submitAiTask,
+    resetAiTask,
+    stopAiPolling,
   }
 })
 

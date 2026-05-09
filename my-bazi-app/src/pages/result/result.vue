@@ -204,35 +204,53 @@
       </view>
 
       <!-- AI 分析报告 - 每篇独立卡片 -->
-      <template v-if="baziStore.currentBaziData.ai_report || isStreaming || streamText">
+      <template v-if="aiReportText || isAiLoading">
 
-        <!-- 流式加载中：顶部状态提示 -->
-        <view v-if="isStreaming" class="stream-status-bar">
-          <view class="stream-dot"></view>
-          <text class="stream-status-text">AI 正在洞察命盘，文字将逐步呈现...</text>
+        <!-- Loading 状态：正在分析中 -->
+        <view v-if="isAiLoading" class="ai-loading-card glass-card">
+          <view class="ai-loading-inner">
+            <view class="ai-loading-orbit">
+              <view class="ai-loading-planet"></view>
+            </view>
+            <view class="ai-loading-texts">
+              <text class="ai-loading-title">正在沟通星宿，深度解析中...</text>
+              <text class="ai-loading-sub">天机推演需要片刻，请稍候</text>
+            </view>
+          </view>
+          <!-- 已生成部分先展示（running 状态时） -->
+          <view v-if="aiReportText" class="ai-partial-hint">
+            <text class="ai-partial-text">已生成 {{ aiReportText.length }} 字，持续更新中</text>
+          </view>
         </view>
 
         <!-- 错误提示 -->
-        <view v-if="streamError" class="stream-error-bar">
-          <text class="stream-error-text">{{ streamError }}</text>
+        <view v-if="isAiError" class="stream-error-bar">
+          <text class="stream-error-text">星路繁忙，请稍后重试</text>
         </view>
 
-        <!-- 篇章卡片 -->
-        <view
-          v-for="(section, index) in parsedAiSections"
-          :key="index"
-          class="ai-section-card glass-card"
-        >
-          <view class="ai-section-header">
-            <view class="ai-section-line"></view>
-            <rich-text :nodes="section.title" class="ai-section-title-text"></rich-text>
+        <!-- 篇章卡片（有内容时展示，loading 中也实时展示已生成部分） -->
+        <template v-if="parsedAiSections.length > 0">
+          <view
+            v-for="(section, index) in parsedAiSections"
+            :key="index"
+            class="ai-section-card glass-card"
+          >
+            <view class="ai-section-header">
+              <view class="ai-section-line"></view>
+              <rich-text :nodes="section.title" class="ai-section-title-text"></rich-text>
+            </view>
+            <rich-text :nodes="section.content" class="ai-rich-text"></rich-text>
           </view>
-          <rich-text :nodes="section.content" class="ai-rich-text"></rich-text>
-        </view>
 
-        <!-- 流式进行中：末尾光标 -->
-        <view v-if="isStreaming && parsedAiSections.length === 0" class="stream-placeholder glass-card">
-          <text class="stream-placeholder-text">{{ streamText || '正在连接 AI...' }}</text>
+          <!-- 生成中：末尾光标动效 -->
+          <view v-if="isAiLoading" class="stream-cursor-row">
+            <view class="stream-cursor"></view>
+          </view>
+        </template>
+
+        <!-- 尚未生成任何章节时的占位 -->
+        <view v-else-if="isAiLoading" class="stream-placeholder glass-card">
+          <text class="stream-placeholder-text">正在连接星宿...</text>
           <view class="stream-cursor"></view>
         </view>
 
@@ -267,7 +285,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { useBaziStore } from '@/store/useBaziStore'
 import { useUserStore } from '@/store/useUserStore'
@@ -276,17 +294,20 @@ import { useUserStore } from '@/store/useUserStore'
 const baziStore = useBaziStore()
 const userStore = useUserStore()
 
-// ── 流式 AI 状态 ──────────────────────────────────────────────────────────────
-const streamText    = ref('')       // 流式累积的文本
-const isStreaming   = ref(false)    // 是否正在流式接收
-const streamDone    = ref(false)    // 是否已完成
-const streamError   = ref('')       // 错误信息
-
-// 最终展示的 AI 报告：流式完成前用 streamText，完成后用 store 中的数据
+// ── AI 轮询状态（从 store 读取，result.vue 只负责展示和触发）────────────────
+// aiReportText：优先展示轮询中的实时内容，完成后用 store 中的持久化数据
 const aiReportText = computed(() => {
-  if (streamText.value) return streamText.value
+  // 轮询进行中或已完成，优先用 currentAiReport（实时追加）
+  if (baziStore.currentAiReport) return baziStore.currentAiReport
+  // 从历史记录进入时，直接用 ai_report
   return baziStore.currentBaziData?.ai_report || ''
 })
+
+const isAiLoading = computed(() =>
+  baziStore.aiTaskStatus === 'pending' || baziStore.aiTaskStatus === 'running'
+)
+const isAiDone    = computed(() => baziStore.aiTaskStatus === 'done')
+const isAiError   = computed(() => baziStore.aiTaskStatus === 'error')
 
 // 弹窗状态
 const showPopup = ref(false)
@@ -449,7 +470,7 @@ const wuxingList = computed(() => {
   ]
 })
 
-// 页面加载时隐藏 TabBar，并判断是否需要发起流式请求
+// 页面加载时隐藏 TabBar
 onMounted(() => {
   uni.hideTabBar({
     animation: false,
@@ -458,98 +479,29 @@ onMounted(() => {
   })
 })
 
-// 接收页面参数，判断是否启动流式 AI
+// 接收页面参数，判断是否启动 AI 分析
 onLoad((options: any) => {
-  const needStream = options?.stream === '1'
+  const needAi   = options?.stream === '1'
   const recordId = options?.record_id || baziStore.currentBaziData?.record_id
 
-  if (needStream && recordId) {
-    startAiStream(recordId)
+  if (needAi && baziStore.currentBaziData) {
+    // 重置上一次的 AI 报告，开始新任务
+    baziStore.submitAiTask(baziStore.currentBaziData)
+  } else if (recordId && !baziStore.currentAiReport && !baziStore.currentBaziData?.ai_report) {
+    // 从历史记录进入且没有报告时，也可触发
+    if (baziStore.currentBaziData) {
+      baziStore.submitAiTask(baziStore.currentBaziData)
+    }
   }
 })
 
-/**
- * 发起流式 AI 请求（微信小程序用 enableChunked）
- */
-function startAiStream(recordId: string) {
-  const token = uni.getStorageSync('token')
-  const baseURL = import.meta.env.VITE_API_BASE_URL || 'https://api.aiyuechuan.cn'
-
-  isStreaming.value = true
-  streamText.value = ''
-  streamDone.value = false
-  streamError.value = ''
-
-  console.log('🌊 [结果页] 开始流式 AI 请求，record_id:', recordId)
-
-  let buffer = ''  // 用于处理跨 chunk 的不完整 SSE 行
-
-  const requestTask = wx.request({
-    url: `${baseURL}/api/ai/stream/${recordId}`,
-    method: 'GET',
-    header: {
-      'Authorization': `Bearer ${token}`,
-      'Accept': 'text/event-stream',
-    },
-    enableChunked: true,  // 关键：开启分块接收
-    success: () => {
-      console.log('✅ [结果页] 流式请求连接成功')
-    },
-    fail: (err: any) => {
-      console.error('❌ [结果页] 流式请求失败:', err)
-      isStreaming.value = false
-      streamError.value = '连接失败，请重试'
-    }
-  })
-
-  // 监听分块数据
-  requestTask.onChunkReceived((res: any) => {
-    try {
-      // ArrayBuffer → string
-      const decoder = new TextDecoder('utf-8')
-      const chunk = decoder.decode(res.data)
-      buffer += chunk
-
-      // 按 \n\n 分割 SSE 事件
-      const events = buffer.split('\n\n')
-      buffer = events.pop() || ''  // 最后一个可能不完整，留到下次
-
-      for (const event of events) {
-        const line = event.trim()
-        if (!line.startsWith('data: ')) continue
-
-        const jsonStr = line.slice(6)  // 去掉 "data: "
-        try {
-          const data = JSON.parse(jsonStr)
-
-          if (data.text) {
-            streamText.value += data.text
-          }
-
-          if (data.done) {
-            isStreaming.value = false
-            streamDone.value = true
-            console.log(`✅ [结果页] 流式完成，总字数: ${data.total}，缓存: ${data.cached || false}`)
-            // 同步到 store
-            if (baziStore.currentBaziData) {
-              baziStore.currentBaziData.ai_report = streamText.value
-            }
-          }
-
-          if (data.error) {
-            isStreaming.value = false
-            streamError.value = data.error
-            console.error('❌ [结果页] 流式错误:', data.error)
-          }
-        } catch (e) {
-          // JSON 解析失败，忽略
-        }
-      }
-    } catch (e) {
-      console.error('❌ [结果页] chunk 解析失败:', e)
-    }
-  })
-}
+// 页面卸载时停止轮询（防止内存泄漏）
+onUnmounted(() => {
+  // 只在任务未完成时停止，已完成的不需要处理
+  if (baziStore.aiTaskStatus !== 'done') {
+    baziStore.stopAiPolling()
+  }
+})
 
 // 返回上一页（兼容从历史记录或排盘准备页进入的场景）
 const goBack = () => {
@@ -1551,6 +1503,84 @@ const handleTermClick = (term: string) => {
 @keyframes blink {
   0%, 100% { opacity: 1; }
   50% { opacity: 0; }
+}
+
+/* 光标行（生成中末尾） */
+.stream-cursor-row {
+  display: flex;
+  justify-content: center;
+  padding: 20rpx 0 40rpx;
+}
+
+/* ==================== AI 异步 Loading 卡片 ==================== */
+.ai-loading-card {
+  margin: 0 0 32rpx;
+  padding: 48rpx 40rpx 36rpx;
+}
+
+.ai-loading-inner {
+  display: flex;
+  align-items: center;
+  gap: 36rpx;
+}
+
+/* 轨道旋转动效 */
+.ai-loading-orbit {
+  width: 80rpx;
+  height: 80rpx;
+  border-radius: 50%;
+  border: 3rpx solid rgba(178, 58, 52, 0.15);
+  border-top-color: #B23A34;
+  animation: orbit-spin 1.2s linear infinite;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.ai-loading-planet {
+  position: absolute;
+  top: -6rpx;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 12rpx;
+  height: 12rpx;
+  border-radius: 50%;
+  background: #B23A34;
+}
+
+@keyframes orbit-spin {
+  to { transform: rotate(360deg); }
+}
+
+.ai-loading-texts {
+  flex: 1;
+}
+
+.ai-loading-title {
+  display: block;
+  font-size: 28rpx;
+  color: #1A1A1A;
+  font-weight: 500;
+  letter-spacing: 2rpx;
+  margin-bottom: 10rpx;
+}
+
+.ai-loading-sub {
+  display: block;
+  font-size: 22rpx;
+  color: rgba(0, 0, 0, 0.4);
+  letter-spacing: 1rpx;
+}
+
+.ai-partial-hint {
+  margin-top: 28rpx;
+  padding-top: 24rpx;
+  border-top: 1rpx solid rgba(212, 175, 55, 0.15);
+}
+
+.ai-partial-text {
+  font-size: 22rpx;
+  color: rgba(178, 58, 52, 0.6);
+  letter-spacing: 1rpx;
 }
 
 /* ==================== 自定义知识弹窗 ==================== */
