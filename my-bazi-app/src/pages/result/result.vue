@@ -213,8 +213,8 @@
               <view class="ai-loading-planet"></view>
             </view>
             <view class="ai-loading-texts">
-              <text class="ai-loading-title">正在沟通星宿，深度解析中...</text>
-              <text class="ai-loading-sub">天机推演需要片刻，请稍候</text>
+              <text class="ai-loading-title">{{ aiLoadingHint }}</text>
+              <text class="ai-loading-sub">深度报告约需 30-60 秒，请稍候</text>
             </view>
           </view>
           <!-- 已生成部分先展示（running 状态时） -->
@@ -285,7 +285,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { useBaziStore } from '@/store/useBaziStore'
 import { useUserStore } from '@/store/useUserStore'
@@ -308,6 +308,30 @@ const isAiLoading = computed(() =>
 )
 const isAiDone    = computed(() => baziStore.aiTaskStatus === 'done')
 const isAiError   = computed(() => baziStore.aiTaskStatus === 'error')
+
+// ── AI Loading 文案轮播 ───────────────────────────────────────────────────────
+const AI_HINTS = [
+  '正在沟通星宿，深度解析中...',
+  '天干地支，正在排列命盘...',
+  '五行能量，正在精密推演...',
+  '洞察灵魂底色，请稍候...',
+  '流年大运，正在逐一推算...',
+  '禅意报告即将呈现...',
+]
+const aiHintIndex = ref(0)
+const aiLoadingHint = computed(() => AI_HINTS[aiHintIndex.value])
+let _hintTimer: ReturnType<typeof setInterval> | null = null
+
+watch(isAiLoading, (loading) => {
+  if (loading) {
+    aiHintIndex.value = 0
+    _hintTimer = setInterval(() => {
+      aiHintIndex.value = (aiHintIndex.value + 1) % AI_HINTS.length
+    }, 4000)
+  } else {
+    if (_hintTimer) { clearInterval(_hintTimer); _hintTimer = null }
+  }
+})
 
 // 弹窗状态
 const showPopup = ref(false)
