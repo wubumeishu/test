@@ -139,13 +139,13 @@
       </section>
     </main>
 
-    <!-- 测试按钮 (开发环境) -->
-    <view class="test-button-float" @click="goToTest">
-      <text class="test-icon">🧪</text>
-      <text class="test-text">测试</text>
-    </view>
-
     <ZenTabBar :current="0" />
+
+    <!-- 零档案破冰引导遮罩 -->
+    <InitialGuideOverlay
+      :visible="showGuideOverlay"
+      @start="handleGuideStart"
+    />
   </view>
 </template>
 
@@ -155,6 +155,7 @@ import { onShow } from '@dcloudio/uni-app'
 import ZenHeader from '@/components/ZenHeader/ZenHeader.vue'
 import ZenCard from '@/components/ZenCard/ZenCard.vue'
 import ZenTabBar from '@/components/ZenTabBar/ZenTabBar.vue'
+import InitialGuideOverlay from '@/components/InitialGuideOverlay/InitialGuideOverlay.vue'
 import { Solar } from 'lunar-javascript'
 import { useArchiveStore } from '@/store/useArchiveStore'
 import { useUserStore } from '@/store/useUserStore'
@@ -163,14 +164,35 @@ import { useUserStore } from '@/store/useUserStore'
 const archiveStore = useArchiveStore()
 const userStore    = useUserStore()
 
+// ── 零档案破冰遮罩 ──
+// 初始值 false，等 onShow 拉取档案后再判断，避免闪烁
+const showGuideOverlay = ref(false)
+
+/**
+ * 点击「开启起卦之旅」→ 跳转档案创建页
+ * 带 isFirst=true 参数，让创建页显示更温馨的引导文案
+ */
+function handleGuideStart() {
+  uni.navigateTo({
+    url: '/package_archive/pages/archive/add?isFirst=true'
+  })
+}
+
 // ── 页面守卫：每次页面显示时检查登录态 ──
-// onShow 在从其他页面返回时也会触发，比 onMounted 更可靠。
-// 使用 reLaunch 清空页面栈，防止用户按返回键回到首页。
 onShow(() => {
   if (!userStore.token) {
     console.log('[Index.onShow] 未检测到 token，reLaunch → /pages/login/login')
     uni.reLaunch({ url: '/pages/login/login' })
+    return
   }
+
+  // 拉取最新档案列表，完成后判断是否显示遮罩
+  archiveStore.fetchArchives().then(() => {
+    showGuideOverlay.value = archiveStore.archives.length === 0
+  }).catch(() => {
+    // 拉取失败时保守处理：不显示遮罩，避免误导用户
+    showGuideOverlay.value = false
+  })
 })
 
 // --- 实时日期状态 ---
@@ -277,11 +299,6 @@ const CHINESE_DAYS = ['','一','二','三','四','五','六','七','八','九','
 // 菜单点击事件
 const handleMenu = () => {
   uni.showToast({ title: '菜单功能', icon: 'none' })
-}
-
-// 跳转到测试页面
-const goToTest = () => {
-  uni.navigateTo({ url: '/pages/test/test' })
 }
 
 onMounted(() => {
