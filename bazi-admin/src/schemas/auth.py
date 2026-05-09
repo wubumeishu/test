@@ -19,6 +19,7 @@ class UserInfo(BaseModel):
     phone: Optional[str] = Field(None, description="手机号，未绑定时为 null")
     nickname: Optional[str] = Field(None, description="昵称")
     avatar_url: Optional[str] = Field(None, description="头像 URL")
+    bio: Optional[str] = Field(None, description="个性签名")
     is_vip: bool = Field(False, description="是否 VIP")
 
 
@@ -114,6 +115,7 @@ class UpdateProfileRequest(BaseModel):
     """
     nickname: Optional[str] = Field(None, description="昵称", max_length=50)
     avatar_url: Optional[str] = Field(None, description="头像 URL", max_length=500)
+    bio: Optional[str] = Field(None, description="个性签名", max_length=100)
     # 绑定/更换手机号时需要同时提供验证码
     phone: Optional[str] = Field(None, description="新手机号（需同时提供 sms_code）")
     sms_code: Optional[str] = Field(None, description="短信验证码（绑定手机号时必填）")
@@ -135,6 +137,7 @@ class UserInfoResponse(BaseModel):
     wechat_openid: Optional[str] = Field(None, description="已绑定微信则返回，否则 null")
     nickname: Optional[str] = None
     avatar_url: Optional[str] = None
+    bio: Optional[str] = Field(None, description="个性签名")
     is_vip: bool = False
     vip_expires_at: Optional[str] = Field(None, description="VIP 到期时间 ISO8601，非 VIP 为 null")
     created_at: str

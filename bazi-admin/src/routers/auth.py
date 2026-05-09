@@ -20,6 +20,7 @@
 """
 import os
 import random
+import certifi
 import httpx
 from datetime import datetime, timedelta
 from typing import Optional
@@ -85,6 +86,7 @@ def _make_login_response(user: User) -> LoginResponse:
             phone=user.phone,
             nickname=user.nickname,
             avatar_url=user.avatar_url,
+            bio=user.bio,
             is_vip=user.is_vip,
         ),
     )
@@ -109,7 +111,7 @@ async def _get_wechat_openid(code: str) -> str:
         "js_code": code,
         "grant_type": "authorization_code",
     }
-    async with httpx.AsyncClient(timeout=10.0) as client:
+    async with httpx.AsyncClient(verify=certifi.where(), timeout=10.0) as client:
         resp = await client.get(url, params=params)
         data = resp.json()
 
@@ -376,6 +378,8 @@ async def update_profile(
         current_user.nickname = request.nickname
     if request.avatar_url is not None:
         current_user.avatar_url = request.avatar_url
+    if request.bio is not None:
+        current_user.bio = request.bio
 
     await db.commit()
     await db.refresh(current_user)
@@ -394,6 +398,7 @@ async def get_me(current_user: User = Depends(get_current_user)):
         wechat_openid=current_user.wechat_openid,
         nickname=current_user.nickname,
         avatar_url=current_user.avatar_url,
+        bio=current_user.bio,
         is_vip=current_user.is_vip,
         vip_expires_at=(
             current_user.vip_expires_at.isoformat()

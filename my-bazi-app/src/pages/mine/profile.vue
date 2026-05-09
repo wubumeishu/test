@@ -94,6 +94,21 @@
         <!-- #endif -->
       </view>
 
+      <!-- ── 个性签名区域 ── -->
+      <view class="section-card">
+        <view class="section-title">个性签名</view>
+        <view class="input-wrapper">
+          <input
+            type="text"
+            class="zen-input"
+            v-model="form.bio"
+            placeholder="写下你的个性签名（最多30字）"
+            maxlength="30"
+          />
+          <text class="material-symbols-outlined input-suffix">draw</text>
+        </view>
+      </view>
+
       <!-- ── 手机号绑定区域 ── -->
       <view class="section-card">
         <view class="section-title">手机号</view>
@@ -169,6 +184,7 @@ const defaultAvatar = '/static/logo.png'
 const form = reactive({
   nickname: userStore.userInfo?.nickname || '',
   avatar_url: userStore.userInfo?.avatar_url || '',
+  bio: userStore.userInfo?.bio || '',
 })
 
 const phoneForm = reactive({
@@ -241,9 +257,9 @@ async function onChooseAvatar(event: any) {
 
   try {
     const cdnUrl = await uploadAvatarFile(tempPath)
-    // 上传成功后替换为真实 URL
+    // 上传成功后替换为真实 URL，并自动保存到后端
     form.avatar_url = cdnUrl
-    uni.showToast({ title: '头像已更新', icon: 'success', duration: 1500 })
+    await handleSave()
   } catch (err: any) {
     console.error('❌ [profile] 头像上传失败:', err.message)
     // 上传失败：恢复为原头像，不保留临时路径
@@ -272,7 +288,7 @@ async function onChooseAvatarFallback() {
       try {
         const cdnUrl = await uploadAvatarFile(tempPath)
         form.avatar_url = cdnUrl
-        uni.showToast({ title: '头像已更新', icon: 'success', duration: 1500 })
+        await handleSave()
       } catch (err: any) {
         form.avatar_url = userStore.userInfo?.avatar_url || ''
         uni.showToast({ title: '头像上传失败，请重试', icon: 'none' })
@@ -369,14 +385,20 @@ async function handleSave() {
       payload.avatar_url = form.avatar_url
     }
 
+    if (form.bio !== (userStore.userInfo?.bio || '')) {
+      payload.bio = form.bio
+    }
+
     // 绑定手机号（需要验证码）
     if (phoneForm.phone && phoneForm.code) {
       if (!/^1[3-9]\d{9}$/.test(phoneForm.phone)) {
         uni.showToast({ title: '手机号格式不正确', icon: 'none' })
+        isSaving.value = false
         return
       }
       if (phoneForm.code.length !== 6) {
         uni.showToast({ title: '请输入6位验证码', icon: 'none' })
+        isSaving.value = false
         return
       }
       payload.phone = phoneForm.phone
@@ -385,6 +407,7 @@ async function handleSave() {
 
     if (Object.keys(payload).length === 0) {
       uni.showToast({ title: '没有需要更新的内容', icon: 'none' })
+      isSaving.value = false
       return
     }
 

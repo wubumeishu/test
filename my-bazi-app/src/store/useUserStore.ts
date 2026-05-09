@@ -24,6 +24,7 @@ export interface UserInfo {
   phone?: string | null
   nickname?: string
   avatar_url?: string
+  bio?: string | null
   is_vip?: boolean
   wechat_openid?: string | null
 }
@@ -41,6 +42,7 @@ interface AuthResponse {
 interface UpdateProfilePayload {
   nickname?: string
   avatar_url?: string
+  bio?: string
   phone?: string
   sms_code?: string
 }
@@ -281,6 +283,7 @@ export const useUserStore = defineStore('user', () => {
         phone?: string | null
         nickname?: string
         avatar_url?: string
+        bio?: string | null
         is_vip?: boolean
         wechat_openid?: string | null
       }>('/api/auth/me')
@@ -291,6 +294,7 @@ export const useUserStore = defineStore('user', () => {
           ...userInfo.value,
           nickname:      res.nickname,
           avatar_url:    res.avatar_url,
+          bio:           res.bio,
           is_vip:        res.is_vip,
           phone:         res.phone,
           wechat_openid: res.wechat_openid,

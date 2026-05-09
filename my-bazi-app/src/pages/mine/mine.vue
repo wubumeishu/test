@@ -18,7 +18,7 @@
           </view>
         </view>
         <text class="user-name">{{ userStore.userInfo?.nickname || '云水禅心' }}</text>
-        <text class="user-tag">ZEN PRACTITIONER</text>
+        <text class="user-tag">{{ userStore.userInfo?.bio || 'ZEN PRACTITIONER' }}</text>
       </view>
 
       <view class="section-container">

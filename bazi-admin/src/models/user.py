@@ -76,6 +76,12 @@ class User(Base, TimestampMixin):
         comment="头像 URL，默认系统内置东方美学头像"
     )
 
+    bio: Mapped[Optional[str]] = mapped_column(
+        String(100),
+        nullable=True,
+        comment="个性签名，最多100字"
+    )
+
     # ── VIP 状态 ──────────────────────────────────────────────
     is_vip: Mapped[bool] = mapped_column(
         Boolean,
