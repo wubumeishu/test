@@ -145,6 +145,7 @@
     <InitialGuideOverlay
       :visible="showGuideOverlay"
       @start="handleGuideStart"
+      @dismiss="showGuideOverlay = false"
     />
   </view>
 </template>
