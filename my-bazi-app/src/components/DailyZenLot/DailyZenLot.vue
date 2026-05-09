@@ -23,8 +23,8 @@
     <!-- 已抽签：签文展示（淡入动画） -->
     <view v-else class="lot-result" :class="{ 'lot-result-in': resultVisible }">
       <text class="lot-number">第 {{ lotNumber }} 签</text>
-      <text class="lot-text brush-font">{{ currentLot.text }}</text>
-      <text class="lot-sub">{{ currentLot.sub }}</text>
+      <text class="lot-text brush-font">{{ currentLot.content }}</text>
+      <text class="lot-sub">{{ currentLot.sub || currentLot.author }}</text>
       <view class="lot-divider"></view>
       <text class="lot-cta-hint">若想开启深度命盘解析，请录入生辰</text>
       <view class="lot-cta-btn" hover-class="lot-cta-btn-hover" @click="handleGoCreate">
@@ -37,54 +37,58 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { get } from '@/utils/request'
 
 const emit = defineEmits<{ (e: 'goCreate'): void }>()
 
-// ── 20 条治愈系禅语 ──────────────────────────────────────────────────────────
-const ZEN_LOTS = [
-  { text: '云无心以出岫，鸟倦飞而知还。', sub: '顺势而为，不必强求，归处即是安处。' },
-  { text: '此心安处是吾乡。', sub: '内心平静，无论身在何处，皆是故乡。' },
-  { text: '花开不并百花丛，独立疏篱趣未穷。', sub: '不必随波逐流，独特之处正是你的光芒。' },
-  { text: '竹密不妨流水过，山高岂碍白云飞。', sub: '障碍只是表象，心若通透，万物皆可穿越。' },
-  { text: '行到水穷处，坐看云起时。', sub: '绝境之后，往往是新的开始。静待，便是智慧。' },
-  { text: '菩提本无树，明镜亦非台。', sub: '执念皆是尘，放下即清明。' },
-  { text: '随缘自适，烦恼即菩提。', sub: '接纳当下的一切，烦恼与智慧本是一体。' },
-  { text: '不是风动，不是幡动，仁者心动。', sub: '外境皆由心生，修心即是修世界。' },
-  { text: '千江有水千江月，万里无云万里天。', sub: '心中有光，处处皆是圆满。' },
-  { text: '春有百花秋有月，夏有凉风冬有雪。', sub: '每个时节都有其美，此刻即是最好的时刻。' },
-  { text: '若无闲事挂心头，便是人间好时节。', sub: '清空杂念，当下便是天堂。' },
-  { text: '水善利万物而不争。', sub: '柔弱胜刚强，以柔克刚是今日的智慧。' },
-  { text: '知足者富，强行者有志。', sub: '感恩已有，方能看见更多的丰盛。' },
-  { text: '为学日益，为道日损。', sub: '减去多余，回归本质，今日宜做减法。' },
-  { text: '上善若水，处众人之所恶。', sub: '甘居低处，方能汇聚万流。' },
-  { text: '致虚极，守静笃。', sub: '在喧嚣中保持内心的空旷与宁静。' },
-  { text: '信言不美，美言不信。', sub: '今日宜听真实之声，而非悦耳之词。' },
-  { text: '曲则全，枉则直，洼则盈。', sub: '弯曲是为了更好地伸展，低谷是为了积蓄力量。' },
-  { text: '为而不争，天下莫能与之争。', sub: '专注于付出，而非争夺，福报自然而来。' },
-  { text: '损之又损，以至于无为。无为而无不为。', sub: '放下执念，顺其自然，反而成就一切。' },
+interface ZenData {
+  id: number
+  content: string
+  author?: string
+  date: string
+}
+
+// ── 本地兜底数据（网络失败时使用）────────────────────────────────────────────
+const FALLBACK_LOTS = [
+  { id: 1,  content: '云无心以出岫，鸟倦飞而知还。',         sub: '顺势而为，不必强求，归处即是安处。' },
+  { id: 2,  content: '此心安处是吾乡。',                     sub: '内心平静，无论身在何处，皆是故乡。' },
+  { id: 3,  content: '竹密不妨流水过，山高岂碍白云飞。',     sub: '障碍只是表象，心若通透，万物皆可穿越。' },
+  { id: 4,  content: '行到水穷处，坐看云起时。',             sub: '绝境之后，往往是新的开始。静待，便是智慧。' },
+  { id: 5,  content: '随缘自适，烦恼即菩提。',               sub: '接纳当下的一切，烦恼与智慧本是一体。' },
+  { id: 6,  content: '若无闲事挂心头，便是人间好时节。',     sub: '清空杂念，当下便是天堂。' },
+  { id: 7,  content: '上善若水，水善利万物而不争。',         sub: '柔弱胜刚强，以柔克刚是今日的智慧。' },
 ]
 
 const drawn         = ref(false)
 const resultVisible = ref(false)
 const lotNumber     = ref(1)
-const currentLot    = ref(ZEN_LOTS[0])
+const currentLot    = ref({ content: '', sub: '', author: '' })
 
-// 每日固定签：基于今日日期做种子，同一天抽到同一签
-onMounted(() => {
-  const today = new Date().toISOString().split('T')[0]
-  let seed = 0
-  for (let i = 0; i < today.length; i++) {
-    seed = ((seed << 5) - seed) + today.charCodeAt(i)
-    seed |= 0
+onMounted(async () => {
+  try {
+    const res = await get<ZenData>('/api/zen/daily')
+    lotNumber.value  = res.id
+    currentLot.value = {
+      content: res.content,
+      sub:     '',          // 后端暂无 sub，留空或后续扩展
+      author:  res.author || '',
+    }
+  } catch {
+    // 网络失败：用本地兜底，基于今日日期选一条
+    const today = new Date().toISOString().split('T')[0]
+    let seed = 0
+    for (let i = 0; i < today.length; i++) {
+      seed = ((seed << 5) - seed) + today.charCodeAt(i)
+      seed |= 0
+    }
+    const item = FALLBACK_LOTS[Math.abs(seed) % FALLBACK_LOTS.length]
+    lotNumber.value  = item.id
+    currentLot.value = { content: item.content, sub: item.sub, author: '' }
   }
-  const idx = Math.abs(seed) % ZEN_LOTS.length
-  lotNumber.value  = idx + 1
-  currentLot.value = ZEN_LOTS[idx]
 })
 
 function handleDraw() {
   drawn.value = true
-  // 延一帧再加 class，触发 CSS 淡入
   setTimeout(() => { resultVisible.value = true }, 30)
 }
 
