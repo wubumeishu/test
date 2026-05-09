@@ -13,7 +13,7 @@
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { post, put } from '../utils/request'
+import { get, post, put } from '../utils/request'
 import { useArchiveStore } from './useArchiveStore'
 import { useBaziStore } from './useBaziStore'
 
@@ -268,6 +268,43 @@ export const useUserStore = defineStore('user', () => {
   }
 
   /**
+   * 从后端拉取最新用户信息并同步到 Store（v3.0 新增）
+   *
+   * 对应后端：GET /api/auth/me
+   * 在 mine.vue 的 onShow 中调用，确保 profile 页修改后头像/昵称能即时刷新。
+   * 静默失败，不影响页面正常展示。
+   */
+  async function getUserInfo(): Promise<void> {
+    try {
+      const res = await get<{
+        user_id: string
+        phone?: string | null
+        nickname?: string
+        avatar_url?: string
+        is_vip?: boolean
+        wechat_openid?: string | null
+      }>('/api/auth/me')
+
+      // 只更新资料字段，不替换 token
+      if (userInfo.value) {
+        userInfo.value = {
+          ...userInfo.value,
+          nickname:      res.nickname,
+          avatar_url:    res.avatar_url,
+          is_vip:        res.is_vip,
+          phone:         res.phone,
+          wechat_openid: res.wechat_openid,
+        }
+        uni.setStorageSync('user_info', userInfo.value)
+        console.log('✅ [useUserStore] 用户信息已从后端同步')
+      }
+    } catch (e: any) {
+      // 静默失败，保持本地缓存数据
+      console.warn('⚠️ [useUserStore] 拉取用户信息失败（静默）:', e?.message ?? e)
+    }
+  }
+
+  /**
    * 提交资料更新到后端（v3.0 新增）
    *
    * 支持：昵称、头像、绑定手机号（需同时传 sms_code）
@@ -304,5 +341,6 @@ export const useUserStore = defineStore('user', () => {
     restoreLoginState,
     updateUserInfo,
     updateProfile,
+    getUserInfo,
   }
 })

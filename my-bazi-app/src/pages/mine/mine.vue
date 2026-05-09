@@ -8,7 +8,7 @@
           <view class="avatar-border">
             <image 
               class="avatar-img" 
-              :src="avatarSrc"
+              :src="finalAvatarSrc"
               mode="aspectFill"
               @error="onAvatarError"
             ></image>
@@ -147,7 +147,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import ZenHeader from '@/components/ZenHeader/ZenHeader.vue'
 import ZenCard from '@/components/ZenCard/ZenCard.vue'
@@ -179,27 +179,36 @@ const fetchRecordCount = async () => {
 const DEFAULT_AVATAR = '/static/logo.png'
 
 /**
- * 头像 src：
- * - 优先使用用户自定义头像（后续接入登录后替换）
- * - 默认使用 PNG 格式的 DiceBear 头像（避免小程序/App 不支持 SVG）
- * - 加载失败时自动降级为本地 logo
+ * 头像 src（computed，响应式绑定 Store）：
+ * - 优先使用用户真实头像（profile 页保存后自动更新）
+ * - 降级为 DiceBear 默认头像
+ * - @error 时降级为本地 logo
+ *
+ * ⚠️ 必须用 computed 而非 ref，否则 Store 更新后视图不会重新渲染
  */
-const avatarSrc = ref(
-  userStore.userInfo?.avatar_url ||
-  'https://api.dicebear.com/7.x/adventurer-neutral/png?seed=Zen'
+const avatarSrc = computed(
+  () => userStore.userInfo?.avatar_url
+    || 'https://api.dicebear.com/7.x/adventurer-neutral/png?seed=Zen'
 )
 
-/** 头像加载失败 → 降级为本地 logo */
+/** 头像加载失败 → 降级为本地 logo（computed 不可直接赋值，用独立 ref 覆盖）*/
+const avatarFallback = ref('')
+const finalAvatarSrc = computed(() => avatarFallback.value || avatarSrc.value)
+
 const onAvatarError = () => {
   console.warn('⚠️ [mine] 头像加载失败，降级为本地默认头像')
-  avatarSrc.value = DEFAULT_AVATAR
+  avatarFallback.value = DEFAULT_AVATAR
 }
 
-// 每次页面显示时刷新档案数据和测算记录数
+// 每次页面显示时刷新档案数据、测算记录数、用户最新资料
 onShow(() => {
-  console.log('👤 [mine] 页面显示，刷新档案数据')
+  console.log('👤 [mine] 页面显示，刷新数据')
   archiveStore.fetchArchives()
   fetchRecordCount()
+  // 拉取最新用户信息（防止 profile 页修改后头像/昵称未同步）
+  if (userStore.isLoggedIn) {
+    userStore.getUserInfo()
+  }
 })
 
 /**
