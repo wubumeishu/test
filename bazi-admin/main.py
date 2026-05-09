@@ -14,6 +14,7 @@ from src.database import init_db, close_db, engine
 from src.core.redis import init_redis, close_redis
 from src.routers import archive_router, fortune_router, ai_router
 from src.routers.auth import router as auth_router
+from src.routers.upload import router as upload_router
 
 # 导入管理后台
 from sqladmin import Admin
@@ -98,6 +99,7 @@ print("✅ 管理后台已挂载到 /admin")
 
 # 注册路由
 app.include_router(auth_router)      # 认证路由
+app.include_router(upload_router)    # 文件上传路由
 app.include_router(archive_router)
 app.include_router(fortune_router)
 app.include_router(ai_router)

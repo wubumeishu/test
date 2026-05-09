@@ -26,19 +26,30 @@
           <!-- #ifdef MP-WEIXIN -->
           <button
             class="change-avatar-btn"
+            :class="{ uploading: isUploadingAvatar }"
+            :disabled="isUploadingAvatar"
             open-type="chooseAvatar"
             @chooseavatar="onChooseAvatar"
           >
-            <text class="material-symbols-outlined btn-icon">photo_camera</text>
-            <text class="btn-text">更换头像</text>
+            <text class="material-symbols-outlined btn-icon">
+              {{ isUploadingAvatar ? 'hourglass_empty' : 'photo_camera' }}
+            </text>
+            <text class="btn-text">{{ isUploadingAvatar ? '上传中...' : '更换头像' }}</text>
           </button>
           <!-- #endif -->
 
           <!-- H5 / App 降级方案 -->
           <!-- #ifndef MP-WEIXIN -->
-          <button class="change-avatar-btn" @click="onChooseAvatarFallback">
-            <text class="material-symbols-outlined btn-icon">photo_camera</text>
-            <text class="btn-text">更换头像</text>
+          <button
+            class="change-avatar-btn"
+            :class="{ uploading: isUploadingAvatar }"
+            :disabled="isUploadingAvatar"
+            @click="onChooseAvatarFallback"
+          >
+            <text class="material-symbols-outlined btn-icon">
+              {{ isUploadingAvatar ? 'hourglass_empty' : 'photo_camera' }}
+            </text>
+            <text class="btn-text">{{ isUploadingAvatar ? '上传中...' : '更换头像' }}</text>
           </button>
           <!-- #endif -->
         </view>
@@ -147,6 +158,7 @@
 import { ref, reactive } from 'vue'
 import ZenHeader from '@/components/ZenHeader/ZenHeader.vue'
 import { useUserStore } from '@/store/useUserStore'
+import { baseURL } from '@/utils/request'
 
 const userStore = useUserStore()
 
@@ -165,39 +177,107 @@ const phoneForm = reactive({
 })
 
 const isSaving = ref(false)
+const isUploadingAvatar = ref(false)  // 头像上传中状态
 const countdown = ref(0)
 
 // ── 头像处理 ──────────────────────────────────────────────────
 
 /**
- * 微信小程序：用户通过 open-type="chooseAvatar" 选择头像后触发
- * event.detail.avatarUrl 是微信临时文件路径
+ * 将临时文件路径上传到服务器，返回可持久访问的 URL
  *
- * ⚠️ 临时路径有效期短，需要立即上传到自己的 CDN 或直接用于展示。
- *    此处先存入 form.avatar_url 用于预览，保存时随 PUT /profile 一起提交。
- *    生产环境建议先上传到 OSS，再把 CDN 地址存入 avatar_url。
+ * 微信临时路径（http://tmp/... 或 wxfile://...）只在本地有效，
+ * 必须上传到服务器才能跨设备、跨会话访问。
  */
-function onChooseAvatar(event: any) {
-  const avatarUrl = event.detail?.avatarUrl
-  if (avatarUrl) {
-    form.avatar_url = avatarUrl
-    console.log('✅ [profile] 微信头像已选择:', avatarUrl.substring(0, 40) + '...')
+async function uploadAvatarFile(tempFilePath: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const token = uni.getStorageSync('token')
+    uni.uploadFile({
+      url: `${baseURL}/api/upload/avatar`,
+      filePath: tempFilePath,
+      name: 'file',
+      header: {
+        Authorization: `Bearer ${token}`,
+      },
+      success: (res) => {
+        if (res.statusCode === 200) {
+          try {
+            const data = JSON.parse(res.data)
+            if (data.url) {
+              console.log('✅ [profile] 头像上传成功:', data.url)
+              resolve(data.url)
+            } else {
+              reject(new Error('上传响应缺少 url 字段'))
+            }
+          } catch (e) {
+            reject(new Error('解析上传响应失败'))
+          }
+        } else {
+          reject(new Error(`上传失败，状态码: ${res.statusCode}`))
+        }
+      },
+      fail: (err) => {
+        reject(new Error(err.errMsg || '网络上传失败'))
+      },
+    })
+  })
+}
+
+/**
+ * 微信小程序：用户通过 open-type="chooseAvatar" 选择头像后触发
+ *
+ * ⚠️ event.detail.avatarUrl 是微信临时路径（http://tmp/...），
+ *    只在本地有效，无法直接存入数据库或跨页面使用。
+ *    必须立即上传到服务器，拿到真实 URL 后再存入 form.avatar_url。
+ */
+async function onChooseAvatar(event: any) {
+  const tempPath = event.detail?.avatarUrl
+  if (!tempPath) return
+
+  console.log('🔄 [profile] 开始上传微信头像...')
+  isUploadingAvatar.value = true
+
+  // 先用临时路径预览，给用户即时反馈
+  form.avatar_url = tempPath
+
+  try {
+    const cdnUrl = await uploadAvatarFile(tempPath)
+    // 上传成功后替换为真实 URL
+    form.avatar_url = cdnUrl
+    uni.showToast({ title: '头像已更新', icon: 'success', duration: 1500 })
+  } catch (err: any) {
+    console.error('❌ [profile] 头像上传失败:', err.message)
+    // 上传失败：恢复为原头像，不保留临时路径
+    form.avatar_url = userStore.userInfo?.avatar_url || ''
+    uni.showToast({ title: '头像上传失败，请重试', icon: 'none' })
+  } finally {
+    isUploadingAvatar.value = false
   }
 }
 
 /**
  * H5 / App 降级方案：使用 uni.chooseImage
  */
-function onChooseAvatarFallback() {
+async function onChooseAvatarFallback() {
   uni.chooseImage({
     count: 1,
     sizeType: ['compressed'],
     sourceType: ['album', 'camera'],
-    success: (res) => {
+    success: async (res) => {
       const tempPath = res.tempFilePaths[0]
-      if (tempPath) {
-        form.avatar_url = tempPath
-        console.log('✅ [profile] 头像已选择（降级方案）')
+      if (!tempPath) return
+
+      isUploadingAvatar.value = true
+      form.avatar_url = tempPath  // 先预览
+
+      try {
+        const cdnUrl = await uploadAvatarFile(tempPath)
+        form.avatar_url = cdnUrl
+        uni.showToast({ title: '头像已更新', icon: 'success', duration: 1500 })
+      } catch (err: any) {
+        form.avatar_url = userStore.userInfo?.avatar_url || ''
+        uni.showToast({ title: '头像上传失败，请重试', icon: 'none' })
+      } finally {
+        isUploadingAvatar.value = false
       }
     },
     fail: (err) => {
@@ -392,6 +472,10 @@ page {
 
   // 重置 button 默认样式
   &::after { border: none; }
+
+  &.uploading {
+    opacity: 0.6;
+  }
 }
 
 .btn-icon {
