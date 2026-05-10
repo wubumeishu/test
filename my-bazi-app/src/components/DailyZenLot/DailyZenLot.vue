@@ -5,7 +5,7 @@
     <view v-if="!drawn" class="lot-action">
       <text class="lot-hint">静心一刻，感受今日天机</text>
       <view class="qian-tong" :class="{ shaking: isShaking }">
-        <text class="qian-tong-icon">🪬</text>
+        <text class="qian-tong-icon">🔮</text>
       </view>
       <view class="draw-btn-wrapper">
         <view class="draw-btn" hover-class="draw-btn-hover" @click="handleDraw">
