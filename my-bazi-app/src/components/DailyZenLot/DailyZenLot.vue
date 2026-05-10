@@ -1,18 +1,11 @@
 <template>
   <view class="zen-lot-card">
 
-    <!-- 标题行 -->
-    <view class="lot-header">
-      <view class="lot-line"></view>
-      <text class="lot-title">灵犀日课</text>
-      <view class="lot-line"></view>
-    </view>
-
     <!-- 未抽签：签筒 + 按钮 -->
     <view v-if="!drawn" class="lot-action">
       <text class="lot-hint">静心一刻，感受今日天机</text>
       <view class="qian-tong" :class="{ shaking: isShaking }">
-        <text class="qian-tong-icon">🎋</text>
+        <text class="qian-tong-icon">🪬</text>
       </view>
       <view class="draw-btn-wrapper">
         <view class="draw-btn" hover-class="draw-btn-hover" @click="handleDraw">
@@ -171,26 +164,6 @@ function handleGoCreate() {
   border-radius: 24rpx;
   padding: 48rpx 40rpx 44rpx;
   box-shadow: 0 8rpx 32rpx rgba(0, 0, 0, 0.04);
-}
-
-/* ── 标题 ── */
-.lot-header {
-  display: flex;
-  align-items: center;
-  gap: 20rpx;
-  margin-bottom: 40rpx;
-}
-.lot-line {
-  flex: 1;
-  height: 1rpx;
-  background: rgba(212, 175, 55, 0.3);
-}
-.lot-title {
-  font-family: 'Noto Serif SC', serif;
-  font-size: 26rpx;
-  color: rgba(51, 51, 51, 0.6);
-  letter-spacing: 0.3em;
-  white-space: nowrap;
 }
 
 /* ── 未抽签 ── */

@@ -15,8 +15,8 @@
           @dismiss="handleGuideOverlayDismiss"
         />
 
-        <!-- 遮罩关闭后展示的内容：日历卡片 + 灵犀日课 -->
         <main class="main-scroll">
+          <!-- 1. 月相图 -->
           <section class="top-card-section">
             <ZenCard class="top-banner">
               <view class="banner-container">
@@ -47,100 +47,7 @@
             </ZenCard>
           </section>
 
-          <!-- 灵犀日课（无档案模式：抽签后显示引导） -->
-          <section class="zen-lot-section">
-            <DailyZenLot :has-archive="false" @goCreate="handleGuideStart" />
-          </section>
-        </main>
-
-      </template>
-
-      <!-- ══ 有档案：正常运势模式 ══ -->
-      <template v-else>
-        <main class="main-scroll">
-
-          <!-- 灵犀日课（有档案模式：抽签后显示运势指数） -->
-          <section class="zen-lot-section zen-lot-top">
-            <DailyZenLot :has-archive="true" @goCreate="handleGuideStart" />
-          </section>
-          <section class="top-card-section">
-            <ZenCard class="top-banner">
-              <view class="banner-container">
-                <view class="banner-left">
-                  <view class="ink-bg">
-                    <text class="material-symbols-outlined ink-icon">nights_stay</text>
-                  </view>
-                  <view class="banner-info">
-                    <view class="info-top">
-                      <view v-if="isSolarTerm">
-                        <text class="tag-text">二十四节气 · 第{{ solarTermIndex }}</text>
-                        <text class="date-text">{{ displayLunarDate }} · 公历 {{ displaySolarDate }}</text>
-                      </view>
-                      <view v-else>
-                        <text class="tag-text">月影禅心 · {{ yueXiangText }}</text>
-                        <text class="date-text">{{ displayLunarDate }} · {{ displayWeekDay }}</text>
-                      </view>
-                    </view>
-                    <view class="quote-area">
-                      <text class="quote-text">{{ currentShortQuote }}</text>
-                    </view>
-                  </view>
-                </view>
-                <view class="banner-right">
-                  <text class="writing-vertical brush-font">{{ solarChineseDateDisplay }}</text>
-                </view>
-              </view>
-            </ZenCard>
-          </section>
-
-          <section class="fortune-index-section">
-            <view class="brush-circle">
-              <view class="ring-wrapper">
-                <view class="ring-bg"></view>
-                <view class="ring-progress-wrapper">
-                  <view class="ring-left" :style="{ transform: (fortuneScore ?? 0) >= 50 ? 'rotate(180deg)' : `rotate(${((fortuneScore ?? 0) / 50) * 180}deg)` }"></view>
-                  <view class="ring-right" :style="{ transform: (fortuneScore ?? 0) >= 50 ? `rotate(${(((fortuneScore ?? 0) - 50) / 50) * 180}deg)` : 'rotate(0deg)' }"></view>
-                </view>
-              </view>
-              <view class="score-box">
-                <text class="score-num brush-font" :class="{ 'score-empty': fortuneScore === null }">
-                  {{ fortuneScore !== null ? fortuneScore : '--' }}
-                </text>
-                <text class="score-label">{{ fortuneScore !== null ? '今日运势指数' : '录入生辰后解锁' }}</text>
-              </view>
-            </view>
-            <view class="calendar-info">
-              <view class="ganzhi-row">
-                <text class="ganzhi-seg">{{ displayBaziParts[0] }}</text>
-                <text class="ganzhi-dot">·</text>
-                <text class="ganzhi-seg">{{ displayBaziParts[1] }}</text>
-                <text class="ganzhi-dot">·</text>
-                <text class="ganzhi-seg">{{ displayBaziParts[2] }}</text>
-              </view>
-              <view class="gold-divider"></view>
-              <text class="advice-text">{{ currentLongQuote }}</text>
-            </view>
-          </section>
-
-          <section class="grid-section">
-            <view class="fortune-grid">
-              <ZenCard class="grid-item" v-for="item in fortuneDimensions" :key="item.label">
-                <view class="grid-content">
-                  <text class="material-symbols-outlined grid-icon">{{ item.icon }}</text>
-                  <text class="grid-label">{{ item.label }}</text>
-                  <view class="dots-row">
-                    <view
-                      class="dot"
-                      v-for="i in 5"
-                      :key="i"
-                      :class="{ active: i <= item.level }"
-                    ></view>
-                  </view>
-                </view>
-              </ZenCard>
-            </view>
-          </section>
-
+          <!-- 2. 万年历 -->
           <section class="almanac-section">
             <ZenCard padding="0" class="almanac-card">
               <view class="almanac-header">
@@ -166,24 +73,128 @@
             </ZenCard>
           </section>
 
-          <section class="cta-section">
-            <ZenCard class="cta-card">
-              <view class="cta-container">
-                <view class="cta-bg"></view>
-                <view class="cta-content">
-                  <view class="cta-tag-row">
-                    <view class="cta-line"></view>
-                    <text class="cta-tag">大师亲测</text>
+          <!-- 3. 日签 -->
+          <section class="zen-lot-section">
+            <DailyZenLot :has-archive="false" @goCreate="handleGuideStart" />
+          </section>
+        </main>
+
+      </template>
+
+      <!-- ══ 有档案：正常运势模式 ══ -->
+      <template v-else>
+        <main class="main-scroll">
+
+          <!-- 1. 月相图 -->
+          <section class="top-card-section">
+            <ZenCard class="top-banner">
+              <view class="banner-container">
+                <view class="banner-left">
+                  <view class="ink-bg">
+                    <text class="material-symbols-outlined ink-icon">nights_stay</text>
                   </view>
-                  <text class="cta-title">年度深度运势解析</text>
-                  <text class="cta-desc">探寻生命律动，预见未来先机</text>
+                  <view class="banner-info">
+                    <view class="info-top">
+                      <view v-if="isSolarTerm">
+                        <text class="tag-text">二十四节气 · 第{{ solarTermIndex }}</text>
+                        <text class="date-text">{{ displayLunarDate }} · 公历 {{ displaySolarDate }}</text>
+                      </view>
+                      <view v-else>
+                        <text class="tag-text">月影禅心 · {{ yueXiangText }}</text>
+                        <text class="date-text">{{ displayLunarDate }} · {{ displayWeekDay }}</text>
+                      </view>
+                    </view>
+                    <view class="quote-area">
+                      <text class="quote-text">{{ currentShortQuote }}</text>
+                    </view>
+                  </view>
                 </view>
-                <view class="cta-arrow">
-                  <text class="material-symbols-outlined">arrow_forward</text>
+                <view class="banner-right">
+                  <text class="writing-vertical brush-font">{{ solarChineseDateDisplay }}</text>
                 </view>
               </view>
             </ZenCard>
           </section>
+
+          <!-- 2. 运势圆环 -->
+          <section class="fortune-index-section">
+            <view class="brush-circle">
+              <view class="ring-wrapper">
+                <view class="ring-bg"></view>
+                <view class="ring-progress-wrapper">
+                  <view class="ring-left" :style="{ transform: (fortuneScore ?? 0) >= 50 ? 'rotate(180deg)' : `rotate(${((fortuneScore ?? 0) / 50) * 180}deg)` }"></view>
+                  <view class="ring-right" :style="{ transform: (fortuneScore ?? 0) >= 50 ? `rotate(${(((fortuneScore ?? 0) - 50) / 50) * 180}deg)` : 'rotate(0deg)' }"></view>
+                </view>
+              </view>
+              <view class="score-box">
+                <text class="score-num brush-font">{{ fortuneScore }}</text>
+                <text class="score-label">今日运势指数</text>
+              </view>
+            </view>
+            <view class="calendar-info">
+              <view class="ganzhi-row">
+                <text class="ganzhi-seg">{{ displayBaziParts[0] }}</text>
+                <text class="ganzhi-dot">·</text>
+                <text class="ganzhi-seg">{{ displayBaziParts[1] }}</text>
+                <text class="ganzhi-dot">·</text>
+                <text class="ganzhi-seg">{{ displayBaziParts[2] }}</text>
+              </view>
+              <view class="gold-divider"></view>
+              <text class="advice-text">{{ currentLongQuote }}</text>
+            </view>
+          </section>
+
+          <!-- 3. 事业 / 财富 / 姻缘 宫格 -->
+          <section class="grid-section">
+            <view class="fortune-grid">
+              <ZenCard class="grid-item" v-for="item in fortuneDimensions" :key="item.label">
+                <view class="grid-content">
+                  <text class="material-symbols-outlined grid-icon">{{ item.icon }}</text>
+                  <text class="grid-label">{{ item.label }}</text>
+                  <view class="dots-row">
+                    <view
+                      class="dot"
+                      v-for="i in 5"
+                      :key="i"
+                      :class="{ active: i <= item.level }"
+                    ></view>
+                  </view>
+                </view>
+              </ZenCard>
+            </view>
+          </section>
+
+          <!-- 4. 万年历 -->
+          <section class="almanac-section">
+            <ZenCard padding="0" class="almanac-card">
+              <view class="almanac-header">
+                <text class="almanac-en">Traditional Calendar</text>
+                <text class="almanac-lunar">{{ lunarMonthDay }} · {{ yueXiangText }}</text>
+              </view>
+              <view class="almanac-body">
+                <view class="almanac-col">
+                  <text class="col-tag col-tag--yi">宜</text>
+                  <view class="col-content">
+                    <text v-for="item in dayYiList" :key="item" class="luck-text">{{ item }}</text>
+                    <text v-if="dayYiList.length === 0" class="luck-text luck-text--empty">—</text>
+                  </view>
+                </view>
+                <view class="almanac-col">
+                  <text class="col-tag col-tag--ji">忌</text>
+                  <view class="col-content">
+                    <text v-for="item in dayJiList" :key="item" class="unluck-text">{{ item }}</text>
+                    <text v-if="dayJiList.length === 0" class="unluck-text unluck-text--empty">—</text>
+                  </view>
+                </view>
+              </view>
+            </ZenCard>
+          </section>
+
+          <!-- 5. 日签 -->
+          <section class="zen-lot-section">
+            <DailyZenLot :has-archive="true" @goCreate="handleGuideStart" />
+          </section>
+
         </main>
       </template>
 
