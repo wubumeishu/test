@@ -1,12 +1,9 @@
 <template>
   <view class="zen-lot-card">
 
-    <!-- 未抽签：签筒 + 按钮 -->
+    <!-- 未抽签：按钮 -->
     <view v-if="!drawn" class="lot-action">
       <text class="lot-hint">静心一刻，感受今日天机</text>
-      <view class="qian-tong" :class="{ shaking: isShaking }">
-        <text class="qian-tong-icon">🔮</text>
-      </view>
       <view class="draw-btn-wrapper">
         <view class="draw-btn" hover-class="draw-btn-hover" @click="handleDraw">
           <text class="material-symbols-outlined draw-icon">auto_awesome</text>
@@ -96,7 +93,6 @@ const FALLBACK = [
 
 // ── 状态 ─────────────────────────────────────────────────────────────────────
 const drawn         = ref(false)
-const isShaking     = ref(false)
 const resultVisible = ref(false)
 const lotNumber     = ref(1)
 const zenContent    = ref('')
@@ -139,16 +135,8 @@ onMounted(async () => {
 
 // ── 抽签：签筒摇晃 → 展示结果 ───────────────────────────────────────────────
 function handleDraw() {
-  if (isShaking.value) return
-
-  // 签筒摇晃动画（600ms）
-  isShaking.value = true
-  setTimeout(() => {
-    isShaking.value = false
-    drawn.value     = true
-    // 延一帧触发 CSS 淡入
-    setTimeout(() => { resultVisible.value = true }, 30)
-  }, 600)
+  drawn.value = true
+  setTimeout(() => { resultVisible.value = true }, 30)
 }
 
 function handleGoCreate() {
@@ -177,26 +165,6 @@ function handleGoCreate() {
   font-size: 24rpx;
   color: rgba(51, 51, 51, 0.45);
   letter-spacing: 0.1em;
-}
-
-/* 签筒 */
-.qian-tong {
-  font-size: 80rpx;
-  line-height: 1;
-  transform-origin: bottom center;
-}
-.shaking {
-  animation: shake 0.6s ease-in-out;
-}
-@keyframes shake {
-  0%   { transform: rotate(0deg); }
-  15%  { transform: rotate(-18deg); }
-  30%  { transform: rotate(16deg); }
-  45%  { transform: rotate(-14deg); }
-  60%  { transform: rotate(12deg); }
-  75%  { transform: rotate(-8deg); }
-  90%  { transform: rotate(4deg); }
-  100% { transform: rotate(0deg); }
 }
 
 /* 抽签按钮 */
