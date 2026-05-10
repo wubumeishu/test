@@ -2,15 +2,21 @@
 每日禅语路由
 
 GET /api/zen/daily   根据「日期 + UserID」返回当日固定禅语（日课）
-                     有档案时额外返回 fortune_scores（运势指数）
+                     有默认档案时额外返回三维运势指数
 
-算法：
-  seed = djb2_hash(f"{user_id}-{today}")
+确定性随机算法：
+  seed = djb2_hash(str(user_id) + str(current_date))
   index = seed % len(ZEN_LIBRARY)
+  → 同一用户同一天无论请求多少次，结果完全一致
 
-缓存：
+运势指数算法：
+  基于「user_id + 出生年月日 + 今日日期 + 维度名」做哈希
+  映射到 60-98 区间，给用户正向激励
+  → 同一用户同一天三个维度结果恒定
+
+缓存策略：
   Redis Key: zen_daily:{user_id}:{today}
-  TTL: 到当天 23:59:59（精确到秒），确保次日自动刷新
+  TTL: 精确到当天 23:59:59，次日自动刷新
 """
 import json
 from datetime import datetime, date, time
@@ -30,9 +36,8 @@ from src.models.user import User
 router = APIRouter(prefix="/api/zen", tags=["每日禅语"])
 
 
-# ── 禅语库（60 条，内存存储，无需数据库）────────────────────────────────────
+# ── 禅语库（60 条，内存存储）────────────────────────────────────────────────
 ZEN_LIBRARY = [
-    # 佛偈 / 禅宗
     {"id": 1,  "content": "菩提本无树，明镜亦非台。本来无一物，何处惹尘埃。",        "author": "六祖慧能"},
     {"id": 2,  "content": "身是菩提树，心如明镜台。时时勤拂拭，勿使惹尘埃。",        "author": "神秀"},
     {"id": 3,  "content": "不是风动，不是幡动，仁者心动。",                          "author": "六祖慧能"},
@@ -48,8 +53,6 @@ ZEN_LIBRARY = [
     {"id": 13, "content": "一切有为法，如梦幻泡影，如露亦如电，应作如是观。",        "author": "金刚经"},
     {"id": 14, "content": "心生则种种法生，心灭则种种法灭。",                        "author": "大乘起信论"},
     {"id": 15, "content": "随缘自适，烦恼即菩提。",                                  "author": "禅语"},
-
-    # 道德经 / 老子
     {"id": 16, "content": "上善若水，水善利万物而不争。",                            "author": "老子"},
     {"id": 17, "content": "知足者富，强行者有志。",                                  "author": "老子"},
     {"id": 18, "content": "致虚极，守静笃。万物并作，吾以观复。",                    "author": "老子"},
@@ -60,15 +63,11 @@ ZEN_LIBRARY = [
     {"id": 23, "content": "天下莫柔弱于水，而攻坚强者莫之能胜。",                    "author": "老子"},
     {"id": 24, "content": "损之又损，以至于无为。无为而无不为。",                    "author": "老子"},
     {"id": 25, "content": "为而不争，天下莫能与之争。",                              "author": "老子"},
-
-    # 庄子
     {"id": 26, "content": "至人无己，神人无功，圣人无名。",                          "author": "庄子"},
     {"id": 27, "content": "吾生也有涯，而知也无涯。以有涯随无涯，殆已。",            "author": "庄子"},
     {"id": 28, "content": "天地与我并生，而万物与我为一。",                          "author": "庄子"},
     {"id": 29, "content": "相濡以沫，不如相忘于江湖。",                              "author": "庄子"},
     {"id": 30, "content": "独与天地精神往来，而不傲倪于万物。",                      "author": "庄子"},
-
-    # 古诗词禅意
     {"id": 31, "content": "行到水穷处，坐看云起时。",                                "author": "王维"},
     {"id": 32, "content": "云无心以出岫，鸟倦飞而知还。",                            "author": "陶渊明"},
     {"id": 33, "content": "此心安处是吾乡。",                                        "author": "苏轼"},
@@ -79,8 +78,6 @@ ZEN_LIBRARY = [
     {"id": 38, "content": "空山新雨后，天气晚来秋。",                                "author": "王维"},
     {"id": 39, "content": "人闲桂花落，夜静春山空。",                                "author": "王维"},
     {"id": 40, "content": "独坐幽篁里，弹琴复长啸。深林人不知，明月来相照。",        "author": "王维"},
-
-    # 现代禅意语录
     {"id": 41, "content": "不执着于过去，不忧虑于未来，只是活在当下这一刻。",        "author": "禅语"},
     {"id": 42, "content": "心若简单，世界便简单；心若复杂，世界便复杂。",            "author": "禅语"},
     {"id": 43, "content": "放下，不是放弃，而是以更轻盈的姿态前行。",                "author": "禅语"},
@@ -91,8 +88,6 @@ ZEN_LIBRARY = [
     {"id": 48, "content": "山不争高，自成其峻；海不争深，自成其渊。",                "author": "禅语"},
     {"id": 49, "content": "凡事顺其自然，遇事处之泰然，得意之时淡然，失意之时坦然。", "author": "禅语"},
     {"id": 50, "content": "心宽，天地就宽；心静，岁月就静。",                        "author": "禅语"},
-
-    # 补充 10 条
     {"id": 51, "content": "不以物喜，不以己悲。",                                    "author": "范仲淹"},
     {"id": 52, "content": "宠辱不惊，闲看庭前花开花落；去留无意，漫随天外云卷云舒。", "author": "洪应明"},
     {"id": 53, "content": "知止而后有定，定而后能静，静而后能安，安而后能虑，虑而后能得。", "author": "大学"},
@@ -111,75 +106,81 @@ ZEN_COUNT = len(ZEN_LIBRARY)
 # ── 响应模型 ──────────────────────────────────────────────────────────────────
 
 class FortuneScores(BaseModel):
-    """有档案时返回的今日运势指数（1-100）"""
-    overall: int   # 综合运势
-    wealth:  int   # 财富
-    career:  int   # 事业
-    love:    int   # 姻缘
-    health:  int   # 健康
+    """三维运势指数（60-98，正向激励区间）"""
+    wealth: int   # 财富
+    career: int   # 事业
+    love:   int   # 感情
 
 
 class DailyZenResponse(BaseModel):
-    id: int
-    content: str
-    author: Optional[str] = None
-    date: str
-    fortune_scores: Optional[FortuneScores] = None  # 有档案时才有值
+    id:               int
+    zen_content:      str
+    author:           Optional[str] = None
+    date:             str
+    is_deterministic: bool = True
+    fortune_scores:   Optional[FortuneScores] = None  # 无档案时为 null
 
 
 # ── 工具函数 ──────────────────────────────────────────────────────────────────
 
 def _djb2_hash(s: str) -> int:
     """
-    djb2 哈希算法：将字符串映射为非负整数。
+    djb2 哈希：将字符串映射为非负整数。
     同一输入永远返回同一结果，适合做确定性种子。
+    实现等价于：hash(str(user_id) + str(current_date))
     """
     h = 5381
     for c in s:
         h = ((h << 5) + h) + ord(c)
-        h &= 0xFFFFFFFF  # 保持 32 位
+        h &= 0xFFFFFFFF
     return h
 
 
 def _today_str() -> str:
-    """返回今日日期字符串，格式 YYYY-MM-DD"""
     return date.today().isoformat()
 
 
 def _seconds_until_midnight() -> int:
-    """返回距今天 23:59:59 的剩余秒数，用于 Redis TTL"""
-    now = datetime.now()
+    """返回距今天 23:59:59 的剩余秒数"""
+    now      = datetime.now()
     midnight = datetime.combine(now.date(), time(23, 59, 59))
-    delta = midnight - now
-    return max(int(delta.total_seconds()), 1)
+    return max(int((midnight - now).total_seconds()), 1)
 
 
 def _pick_zen(user_id: str, today: str) -> dict:
     """
-    根据 user_id + 日期确定性地选取一条禅语。
-    同一用户同一天永远返回同一条。
+    确定性选取禅语：hash(user_id + today) % 60
+    同一用户同一天无论请求多少次，结果完全一致。
     """
-    seed_str = f"{user_id}-{today}"
-    idx = _djb2_hash(seed_str) % ZEN_COUNT
+    idx = _djb2_hash(str(user_id) + str(today)) % ZEN_COUNT
     return ZEN_LIBRARY[idx]
 
 
-def _calc_fortune(user_id: str, birth_date: str, today: str) -> FortuneScores:
+def _calc_fortune(
+    user_id: str,
+    birth_year: int,
+    birth_month: int,
+    birth_day: int,
+    today: str,
+) -> FortuneScores:
     """
-    根据「user_id + 出生日期 + 今日日期」确定性地计算五维运势指数。
-    范围 55-98，避免极端低分影响用户情绪。
-    同一用户同一天结果恒定。
+    三维运势指数算法：
+      seed_base = hash(user_id + birth_year + birth_month + birth_day + today)
+      每个维度在 seed_base 基础上再混入维度名，保证三个维度独立变化。
+      映射到 60-98（正向激励区间，避免极端低分影响用户情绪）。
+
+    同一用户同一天三个维度结果恒定。
     """
-    def score(suffix: str) -> int:
-        seed = _djb2_hash(f"{user_id}-{birth_date}-{today}-{suffix}")
-        return 55 + (seed % 44)   # 55~98
+    birth_key = f"{user_id}{birth_year}{birth_month:02d}{birth_day:02d}{today}"
+
+    def _score(dimension: str) -> int:
+        seed = _djb2_hash(birth_key + dimension)
+        return 60 + (seed % 39)   # 60 ~ 98
 
     return FortuneScores(
-        overall=score("overall"),
-        wealth =score("wealth"),
-        career =score("career"),
-        love   =score("love"),
-        health =score("health"),
+        wealth=_score("wealth"),
+        career=_score("career"),
+        love  =_score("love"),
     )
 
 
@@ -192,77 +193,86 @@ async def get_daily_zen(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    根据「当前日期 + UserID」返回当日固定禅语，有档案时额外返回运势指数。
+    根据「当前日期 + UserID」返回当日固定禅语，有默认档案时额外返回运势指数。
 
-    同一用户同一天调用多次，结果完全一致（日课特性）。
-    结果缓存至当天 23:59:59，次日自动刷新。
+    **确定性保证**：同一用户同一天无论请求多少次，`zen_content` 和 `fortune_scores` 完全一致。
+
+    **缓存**：结果缓存至当天 23:59:59，次日零点自动刷新。
 
     返回示例（有档案）：
     ```json
     {
-      "id": 12,
-      "content": "过去心不可得，现在心不可得，未来心不可得。",
-      "author": "金刚经",
+      "id": 33,
+      "zen_content": "此心安处是吾乡。",
+      "author": "苏轼",
       "date": "2026-05-10",
-      "fortune_scores": {
-        "overall": 82, "wealth": 75, "career": 88, "love": 71, "health": 90
-      }
+      "is_deterministic": true,
+      "fortune_scores": { "wealth": 85, "career": 92, "love": 78 }
+    }
+    ```
+
+    返回示例（无档案）：
+    ```json
+    {
+      "id": 33,
+      "zen_content": "此心安处是吾乡。",
+      "author": "苏轼",
+      "date": "2026-05-10",
+      "is_deterministic": true,
+      "fortune_scores": null
     }
     ```
     """
-    today = _today_str()
+    today     = _today_str()
     cache_key = f"zen_daily:{current_user.user_id}:{today}"
 
     # ── 读缓存 ────────────────────────────────────────────────────────────────
     cached = await redis_client.get(cache_key)
     if cached:
-        data = json.loads(cached)
-        return DailyZenResponse(**data)
+        return DailyZenResponse(**json.loads(cached))
 
-    # ── 计算今日禅语 ──────────────────────────────────────────────────────────
+    # ── 选取今日禅语（确定性）────────────────────────────────────────────────
     zen = _pick_zen(current_user.user_id, today)
 
-    # ── 查询默认档案，有则计算运势指数 ───────────────────────────────────────
-    fortune_scores = None
+    # ── 查询默认档案，计算运势指数 ────────────────────────────────────────────
+    fortune_scores: Optional[FortuneScores] = None
     try:
         from src.models.archive import Archive
-        stmt = select(Archive).where(
-            Archive.user_id == current_user.user_id,
-            Archive.is_default == True,
-        ).limit(1)
+        # 优先取默认档案，无则取最新一条
+        stmt = (
+            select(Archive)
+            .where(Archive.user_id == current_user.user_id)
+            .order_by(Archive.is_default.desc(), Archive.local_created_at.desc())
+            .limit(1)
+        )
         result = await db.execute(stmt)
         archive = result.scalar_one_or_none()
 
-        if archive is None:
-            # 没有默认档案，取第一个档案
-            stmt2 = select(Archive).where(
-                Archive.user_id == current_user.user_id
-            ).limit(1)
-            result2 = await db.execute(stmt2)
-            archive = result2.scalar_one_or_none()
-
-        if archive and archive.birth_date:
+        if archive:
             fortune_scores = _calc_fortune(
-                current_user.user_id,
-                str(archive.birth_date),
-                today,
+                user_id     = current_user.user_id,
+                birth_year  = archive.birth_year,
+                birth_month = archive.birth_month,
+                birth_day   = archive.birth_day,
+                today       = today,
             )
     except Exception:
-        pass  # 查询失败时静默处理，不影响禅语返回
+        pass  # 静默处理，不影响禅语返回
 
+    # ── 构造响应 ──────────────────────────────────────────────────────────────
     result_obj = DailyZenResponse(
-        id=zen["id"],
-        content=zen["content"],
-        author=zen.get("author"),
-        date=today,
-        fortune_scores=fortune_scores,
+        id              = zen["id"],
+        zen_content     = zen["content"],
+        author          = zen.get("author"),
+        date            = today,
+        is_deterministic= True,
+        fortune_scores  = fortune_scores,
     )
 
     # ── 写缓存（精确到当天 23:59:59）─────────────────────────────────────────
-    ttl = _seconds_until_midnight()
     await redis_client.setex(
         cache_key,
-        ttl,
+        _seconds_until_midnight(),
         json.dumps(result_obj.model_dump(), ensure_ascii=False),
     )
 

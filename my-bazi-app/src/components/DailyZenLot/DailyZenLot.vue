@@ -65,19 +65,22 @@ const props = withDefaults(defineProps<Props>(), { hasArchive: false })
 const emit  = defineEmits<{ (e: 'goCreate'): void }>()
 
 interface FortuneScores {
-  overall: number
-  wealth:  number
-  career:  number
-  love:    number
-  health:  number
+  wealth: number
+  career: number
+  love:   number
 }
 
 interface ZenData {
-  id:              number
-  content:         string
-  author?:         string
-  date:            string
-  fortune_scores?: FortuneScores
+  id:               number
+  zen_content:      string
+  author?:          string
+  date:             string
+  is_deterministic: boolean
+  fortune_scores?:  {
+    wealth: number
+    career: number
+    love:   number
+  } | null
 }
 
 // ── 本地兜底 ─────────────────────────────────────────────────────────────────
@@ -104,11 +107,9 @@ const fortuneList = computed(() => {
   if (!fortuneScores.value) return []
   const s = fortuneScores.value
   return [
-    { label: '综合', score: s.overall, color: '#B23A34' },
-    { label: '财富', score: s.wealth,  color: '#D4AF37' },
-    { label: '事业', score: s.career,  color: '#4A7C59' },
-    { label: '姻缘', score: s.love,    color: '#C0392B' },
-    { label: '健康', score: s.health,  color: '#2980B9' },
+    { label: '财富', score: s.wealth, color: '#D4AF37' },
+    { label: '事业', score: s.career, color: '#4A7C59' },
+    { label: '感情', score: s.love,   color: '#C0392B' },
   ]
 })
 
@@ -116,9 +117,9 @@ const fortuneList = computed(() => {
 onMounted(async () => {
   try {
     const res = await get<ZenData>('/api/zen/daily')
-    lotNumber.value    = res.id
-    zenContent.value   = res.content
-    zenAuthor.value    = res.author || ''
+    lotNumber.value     = res.id
+    zenContent.value    = res.zen_content
+    zenAuthor.value     = res.author || ''
     fortuneScores.value = res.fortune_scores ?? null
   } catch {
     const today = new Date().toISOString().split('T')[0]
